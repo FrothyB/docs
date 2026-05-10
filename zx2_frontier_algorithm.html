@@ -379,6 +379,39 @@
     font: 850 13px/1 ui-sans-serif, system-ui, sans-serif;
   }
   .statecard code { font-size: 12px; }
+  .choicebar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px 16px 0;
+    border-top: 1px solid var(--line);
+    font: 800 13px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .choicebar button {
+    appearance: none;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--white);
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+  }
+  .choicebar button.active {
+    border-color: rgba(8,125,120,.55);
+    background: #e4f2ef;
+    color: var(--teal);
+  }
+  .route-note {
+    min-height: 54px;
+    padding: 10px 16px 16px;
+    color: var(--muted);
+    font: 14px/1.38 ui-sans-serif, system-ui, sans-serif;
+  }
+  .routepath { transition: opacity .22s, stroke-width .22s; }
+  .routepath.dim { opacity: .18; }
+  .routepath.hotline { stroke-width: 10; }
   .pulse { animation: pulse 2.2s ease-in-out infinite; }
   .march { animation: march 5.5s linear infinite; }
   .draw { stroke-dasharray: 460; stroke-dashoffset: 460; animation: draw 4.8s ease-in-out infinite; }
@@ -404,7 +437,7 @@
   <header class="hero">
     <div class="wrap">
       <h1>The ZX2 frontier parser</h1>
-      <p class="dek">Frontier mode turns LZ parsing from a local hunch into a shortest-path problem: pay literals, buy matches, and let the cheapest route through the segment win.</p>
+      <p class="dek">Frontier mode gives the compressor a little map and a strict travel budget: pay literal tolls, buy match shortcuts, and let the cheapest route across the segment win.</p>
       <div class="meta">
         <span class="pill">Core/misc/ZX2.hpp</span>
         <span class="pill">segmented dynamic programming</span>
@@ -416,21 +449,21 @@
   <section>
     <div class="wrap grid">
       <div>
-        <h2>Start with the real choice</h2>
-        <p class="lead">ZX2 is an LZ compressor: its output is mostly literal bytes plus instructions to copy earlier bytes. The hard part is not decoding those instructions. It is deciding where they should be.</p>
-        <p>A literal is brutally honest: spend the byte. A match is a bet: pay a token, pay offset bits, maybe pay length extensions, then hope the copied span is long enough to amortize the overhead. That is why "found a repeat" is not the same as "should emit a match".</p>
-        <p>The parser is the part of the compressor that decides where the literals and matches go. The decoder is much simpler: it just follows the final token stream. All the frontier machinery exists only while compressing.</p>
+        <h2>The parser's bargain</h2>
+        <p class="lead">ZX2 is an LZ compressor: its output is mostly raw bytes plus little instructions saying "copy that thing from back there." The decoder has the easy job. The parser has to decide where the instructions are worth the ink.</p>
+        <p>A literal is plain cash: spend the byte and move on. A match is a coupon with a cover charge: pay a token, pay offset bits, maybe pay length extensions, then hope the copied span is long enough to make the deal good. "We found a repeat" is only the opening bid.</p>
+        <p>The parser chooses the mixture of literal runs and matches before anything reaches the decoder. Frontier mode is the parser taking a breath, looking across a bounded stretch of input, and asking for the cheapest whole route instead of the shiniest next step.</p>
         <div class="mini">
-          <div><b>Literal run</b><span>Raw bytes copied into the literal stream. Great when data is new, bad when it repeats.</span></div>
-          <div><b>Match</b><span>A length plus an offset. Great when the copied phrase is long enough to pay for the token and offset.</span></div>
-          <div><b>Parser</b><span>The optimizer that chooses a sequence of literal runs and matches before anything reaches the decoder.</span></div>
+          <div><b>Literal run</b><span>Raw bytes paid for directly. Honest, reliable, and expensive when the data starts repeating itself.</span></div>
+          <div><b>Match</b><span>A length plus an offset. Cheap only after the copied phrase has paid back the token and offset toll.</span></div>
+          <div><b>Parser</b><span>The negotiator that chooses the final sequence of literal runs and matches before the decoder ever sees a byte.</span></div>
         </div>
       </div>
       <figure class="figure">
         <svg viewBox="0 0 760 430" role="img" aria-label="input bytes becoming ZX2 tokens">
           <rect width="760" height="430" fill="#fffdfa"/>
-          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">Same bytes, different stories</text>
-          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The parser chooses which story is cheapest to encode.</text>
+          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">Same bytes, different invoices</text>
+          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The parser chooses the bill that comes out smallest.</text>
           <g transform="translate(58 135)" font-family="ui-monospace, Menlo, monospace" font-size="18" font-weight="800" text-anchor="middle">
             <g>
               <rect x="0" y="0" width="42" height="42" rx="6" fill="#f7f5ef" stroke="#d8d2c5"/><text x="21" y="27">a</text>
@@ -458,7 +491,7 @@
             <text x="400" y="55" fill="#17201c" font-size="18" font-weight="850">copy len 6, off 6</text>
           </g>
         </svg>
-        <figcaption class="caption">A repeat is useful only after the fixed match overhead is paid back by enough copied bytes.</figcaption>
+        <figcaption class="caption">A repeat becomes useful only after enough copied bytes pay back the fixed match overhead.</figcaption>
       </figure>
     </div>
   </section>
@@ -466,10 +499,10 @@
   <section>
     <div class="wrap grid">
       <div>
-        <h2>The problem with a tempting match</h2>
-        <p class="lead">Compression parsing is full of little traps. At byte 1000 you may find a decent repeated phrase and grab it. But the byte at 1001 might start a much better phrase.</p>
-        <p>The lazy parser handles the simplest version of that trap by looking one step ahead. ZX2 frontier mode goes further. It treats the next segment as a tiny map: every byte position is a place you can stand, and every literal or match is a move to another place.</p>
-        <p>The goal is not "take the best match now". The goal is "arrive at the end of this segment with the lowest encoded cost".</p>
+        <h2>The trap one byte later</h2>
+        <p class="lead">Parsing is full of bait. At byte 1000 a decent repeated phrase waves at you. Take it too eagerly, and byte 1001 may reveal the much better phrase you just stepped over.</p>
+        <p>The lazy parser handles the baby version of that problem by peeking one byte ahead. ZX2 frontier mode goes further. It treats the next segment as a small map: every byte boundary is a place to stand, and every literal or match is a road to somewhere farther right.</p>
+        <p>The question stops being "what is the nicest match under my nose?" and becomes "what route gets me to the segment end with the smallest encoded bill?"</p>
         <div class="rail" aria-label="toy repeated input">
           <span class="cool">a</span><span>b</span><span>r</span><span>a</span><span>c</span><span>a</span>
           <span class="hot">a</span><span class="hot">b</span><span class="hot">r</span><span class="hot">a</span><span class="hot">c</span><span class="hot">a</span>
@@ -492,14 +525,19 @@
               <path d="M0 -16 H88"/><path d="M88 -16 H176"/><path d="M176 -16 H264"/><path d="M264 -16 H352"/>
               <path d="M352 -16 H440"/><path d="M440 -16 H528"/><path d="M528 -16 H616"/>
             </g>
-            <path class="draw" d="M88 0 C154 -112 286 -112 352 0" fill="none" stroke="#087d78" stroke-width="8" stroke-linecap="round"/>
-            <path d="M176 0 C274 -178 430 -178 528 0" fill="none" stroke="#b43d45" stroke-width="8" stroke-linecap="round"/>
+            <path id="greedyRoute" class="routepath draw" d="M88 0 C154 -112 286 -112 352 0" fill="none" stroke="#087d78" stroke-width="8" stroke-linecap="round"/>
+            <path id="frontierRoute" class="routepath dim" d="M176 0 C274 -178 430 -178 528 0" fill="none" stroke="#b43d45" stroke-width="8" stroke-linecap="round"/>
             <circle class="march" cx="0" cy="-16" r="10" fill="#3768a6"/>
           </g>
-          <text x="72" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">A segment becomes a graph</text>
-          <text x="72" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">Short flat edges are literals. Arcs are matches. The parser chooses a path.</text>
+          <text x="72" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">A segment becomes a map</text>
+          <text x="72" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">Flat roads are literals. Arcs are match shortcuts. The parser chooses a route.</text>
         </svg>
-        <figcaption class="caption">The frontier parser is just shortest path on a very special graph: byte positions only move forward, so one pass is enough.</figcaption>
+        <figcaption class="caption">Toggle the route: the tempting shortcut wins locally; the frontier route can win once the whole segment is priced.</figcaption>
+        <div class="choicebar" aria-label="route comparison controls">
+          <button class="active" type="button" data-route="greedy">Greedy-looking shortcut</button>
+          <button type="button" data-route="frontier">Frontier route</button>
+        </div>
+        <div class="route-note" id="routeNote">The local parser grabs the early match. It looks tidy, but it may spend the start of a better later match.</div>
       </figure>
     </div>
   </section>
@@ -508,17 +546,17 @@
     <div class="wrap grid">
       <div>
         <h2>What "frontier" means here</h2>
-        <p>Imagine a line sweeping left to right over the segment. Behind it, the parser has already priced the cheapest known way to stand at each byte boundary. At the line, it spends that known cost into the future.</p>
-        <p>A literal edge always exists: append one raw byte and advance by one. A match edge exists only when the BT match finder returns a repeated phrase whose encoded match cost beats the same bytes as literals.</p>
-        <p>The frontier is not a queue or a geometric object in the code. It is this compact table of best-known futures:</p>
+        <p>Imagine a survey line moving left to right. Behind it, every byte boundary already has a best known price tag. At the line, the parser spends that price forward: one literal step, or one match shortcut.</p>
+        <p>The literal step is always available: append one raw byte and advance. A match shortcut appears only when the BT match finder returns a repeated phrase whose encoded match cost beats spelling those bytes out literally.</p>
+        <p>The "frontier" is not a grand object in the code. It is a neat little ledger of best-known futures:</p>
         <pre class="codebox">cost[rel]      best cost to reach byte rel
 parent[rel]    previous position on the winning path
 parentLen      emitted literal length or match length
 parentOff      match offset, or zero for literals</pre>
         <div class="statecards">
-          <div class="statecard"><b>One survivor</b>Each byte position keeps one winning cost. Close losers are discarded, even if they carry a different literal-run phase.</div>
-          <div class="statecard"><b>Literal phase</b><code>litExtLeft</code> remembers when the next literal byte will also force a length-extension byte.</div>
-          <div class="statecard"><b>Traceback</b><code>parent == UINT32_MAX</code> means the winning stretch is literal text; any other parent means a match jump.</div>
+          <div class="statecard"><b>One survivor</b>Each byte boundary keeps one winning price. Close losers are swept off the table, even if they had a different literal-run phase.</div>
+          <div class="statecard"><b>Literal phase</b><code>litExtLeft</code> is the toll countdown: when it hits zero, the next literal also buys an extension byte.</div>
+          <div class="statecard"><b>Traceback</b><code>parent == UINT32_MAX</code> means "this stretch was raw text"; any real parent means "jumped here by match".</div>
         </div>
       </div>
       <figure class="figure sim" aria-label="animated frontier table">
@@ -532,17 +570,17 @@ parentOff      match offset, or zero for literals</pre>
   <section>
     <div class="wrap grid">
       <div>
-        <h2>The price is counted in bits</h2>
-        <p class="lead">The graph is useful only because every edge has a real price. ZX2 scores the same bytes the stream will later write: token bits, offset bits, literal payload bytes, and extension bytes.</p>
-        <p>For a literal edge, the usual cost is one payload byte. But literal runs have length fields, and at exact thresholds one more literal also buys another extension byte. That is why the frontier carries <code>litExtLeft</code>, a tiny countdown to the next literal-length toll.</p>
-        <p>For a match edge, the price is front-loaded: one token plus the raw offset bits, with extra length bytes only for long matches. In the source this is <code>matchLenCost8</code>; despite the suffix, the values are ordinary bit counts.</p>
+        <h2>The ledger is in bits</h2>
+        <p class="lead">The map only works because every road has an honest price. ZX2 charges exactly what the stream will later write: token bits, offset bits, literal payload bytes, and extension bytes.</p>
+        <p>A literal edge usually costs one payload byte. But literal runs have length fields, and at exact thresholds one more literal also buys another extension byte. That is why the frontier carries <code>litExtLeft</code>, a tiny countdown to the next literal-length toll booth.</p>
+        <p>A match edge is front-loaded: one token plus raw offset bits, with extra length bytes only for long matches. In the source this is <code>matchLenCost8</code>; despite the suffix, the values are ordinary bit counts.</p>
       </div>
       <div>
         <figure class="figure">
           <svg viewBox="0 0 760 470" role="img" aria-label="frontier state transition equation">
             <rect width="760" height="470" fill="#ffffff"/>
-            <text x="48" y="56" fill="#13201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="850">One state, two forward edges</text>
-            <text x="48" y="86" fill="#5f6f69" font-family="ui-sans-serif, system-ui" font-size="16">At byte rel, the parser spends the current cost into future byte positions.</text>
+            <text x="48" y="56" fill="#13201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="850">One state, two ways to spend</text>
+            <text x="48" y="86" fill="#5f6f69" font-family="ui-sans-serif, system-ui" font-size="16">At byte rel, the current bill is pushed into future byte positions.</text>
             <g transform="translate(72 164)" font-family="ui-sans-serif, system-ui">
               <rect x="0" y="0" width="170" height="94" rx="8" fill="#13201c"/>
               <text x="22" y="36" fill="#ffffff" font-size="18" font-weight="850">state rel</text>
@@ -565,9 +603,9 @@ parentOff      match offset, or zero for literals</pre>
               <text x="20" y="34" fill="#13201c">relax(dst, newCost): if newCost &lt; cost[dst], replace cost and parent</text>
             </g>
           </svg>
-          <figcaption class="caption">Frontier mode is exact for the candidate graph it builds. The approximation is in which states and match candidates it chooses to keep.</figcaption>
+          <figcaption class="caption">Frontier mode is exact for the map it actually draws. The approximation is in which states and match shortcuts are allowed onto the map.</figcaption>
         </figure>
-        <p>The accounting stays integer and mechanical: no floats, no entropy model, no statistical guess. The parser is only asking which tokenization is cheaper under ZX2's own format.</p>
+        <p>The accounting stays integer and mechanical: no floats, no entropy oracle, no statistical incense. The parser is only asking which tokenization is cheaper under ZX2's own format.</p>
         <div class="score">
           <div><b>short repeat</b><span>bad</span></div>
           <div><b>medium repeat</b><span>maybe</span></div>
@@ -581,16 +619,16 @@ parentOff      match offset, or zero for literals</pre>
   <section class="band">
     <div class="wrap grid">
       <div>
-        <h2>A small scoring example</h2>
-        <p>Suppose the offset takes 22 bits. A match also needs a token byte, so a short match starts with about 30 bits of overhead before length extensions. Replacing four literal bytes saves only 32 payload bits. That is barely worth anything, and after parser penalties it may be rejected.</p>
-        <p>Replacing twenty bytes is different. The literal version costs around 160 payload bits, while the match still pays the same offset and token overhead. The longer the copied phrase, the more the fixed overhead disappears into the noise.</p>
-        <p>This is the quiet reason the frontier parser does not simply prefer the longest match. It prefers the path whose total encoding price is smallest.</p>
+        <h2>A tiny bill dispute</h2>
+        <p>Suppose the offset takes 22 bits. A match also needs a token byte, so a short match starts with about 30 bits of overhead before length extensions. Replacing four literal bytes saves only 32 payload bits. That is barely a win; after parser penalties, it may not deserve the paperwork.</p>
+        <p>Replacing twenty bytes is a different conversation. The literal version costs around 160 payload bits, while the match still pays the same offset and token overhead. The longer the copied phrase, the more that fixed cover charge fades into the background.</p>
+        <p>This is the quiet reason frontier does not bow to the longest match. It bows to the cheapest complete route.</p>
       </div>
       <figure class="figure">
         <svg viewBox="0 0 760 410" role="img" aria-label="match cost amortization">
           <rect width="760" height="410" fill="#fffdfa"/>
-          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">Match overhead gets cheaper per byte</text>
-          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">A fixed token plus offset is painful for tiny matches and excellent for long ones.</text>
+          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">The cover charge fades with length</text>
+          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">A fixed token plus offset hurts tiny matches and flatters long ones.</text>
           <g transform="translate(78 315)" font-family="ui-sans-serif, system-ui" text-anchor="middle">
             <line x1="0" y1="0" x2="610" y2="0" stroke="#17201c" stroke-width="3"/>
             <line x1="0" y1="0" x2="0" y2="-210" stroke="#17201c" stroke-width="3"/>
@@ -609,34 +647,34 @@ parentOff      match offset, or zero for literals</pre>
             <path d="M18 48 H48" stroke="#087d78" stroke-width="6" stroke-linecap="round"/><text x="60" y="53" fill="#17201c">match</text>
           </g>
         </svg>
-        <figcaption class="caption">The exact constants differ with compile-time offset width and length-extension thresholds, but the shape is the important part.</figcaption>
+        <figcaption class="caption">The constants move with offset width and extension thresholds; the curve is the lesson.</figcaption>
       </figure>
     </div>
   </section>
 
   <section>
     <div class="wrap">
-      <h2>The whole algorithm in five moves</h2>
+      <h2>The whole trick in five moves</h2>
       <div class="timeline">
         <div class="step">
           <div class="num">1</div>
-          <p><strong>Cut the input into segments.</strong> The current code uses <code>ZX2_FRONTIER_SEGMENT</code>, default 32768 bytes. Each segment is one bounded shortest-path problem.</p>
+          <p><strong>Cut the input into segments.</strong> The current code uses <code>ZX2_FRONTIER_SEGMENT</code>, default 32768 bytes. Each segment gets its own little route-planning problem.</p>
         </div>
         <div class="step">
           <div class="num">2</div>
-          <p><strong>Seed the first cost.</strong> At the start of a segment, <code>cost[0] = 0</code>. The pending literal-run state is imported with <code>litExtLeft[0]</code>, because a literal run can continue across segment boundaries.</p>
+          <p><strong>Seed the first cost.</strong> At the start of a segment, <code>cost[0] = 0</code>. The pending literal-run state rides in through <code>litExtLeft[0]</code>, because a literal run may cross the border.</p>
         </div>
         <div class="step">
           <div class="num">3</div>
-          <p><strong>Advance by one literal.</strong> From each reachable position, it offers a one-byte literal edge. Most literals cost 8 bits of payload; sometimes they also trigger a literal-length extension byte.</p>
+          <p><strong>Offer the honest step.</strong> From each reachable position, the parser can always buy one more literal byte. Usually that is 8 bits; occasionally the length field asks for another byte too.</p>
         </div>
         <div class="step">
           <div class="num">4</div>
-          <p><strong>Walk the per-hash binary tree.</strong> <code>findBestAndInsertBT</code> inserts the current byte position into a tree of older strings with the same 4-byte hash, then returns the best useful repeat found during that insertion walk.</p>
+          <p><strong>Ask the tree for shortcuts.</strong> <code>findBestAndInsertBT</code> inserts the current byte position into a tree of older strings with the same 4-byte hash, then returns the best useful repeat found along the way.</p>
         </div>
         <div class="step">
           <div class="num">5</div>
-          <p><strong>Trace back and emit.</strong> Once <code>cost[segN]</code> is finite, ZX2 follows <code>parent[]</code> backward, reverses the route, and feeds those literal runs and matches into <code>BlockBuilder</code>.</p>
+          <p><strong>Follow the receipts home.</strong> Once <code>cost[segN]</code> is finite, ZX2 follows <code>parent[]</code> backward, reverses the route, and feeds those literal runs and matches into <code>BlockBuilder</code>.</p>
         </div>
       </div>
     </div>
@@ -646,7 +684,7 @@ parentOff      match offset, or zero for literals</pre>
     <div class="wrap grid">
       <div>
         <h2>The code, translated</h2>
-        <p>The actual loop in <code>ZX2Compressor::compress</code> is compact because the graph is acyclic. It does dynamic programming, literal-run phase tracking, BT match generation, and traceback in one forward sweep plus one backward pass.</p>
+        <p>The loop in <code>ZX2Compressor::compress</code> is short because the map has no loops. It does dynamic programming, literal-run phase tracking, BT match generation, and traceback in one forward sweep plus one backward walk through the receipts.</p>
         <pre class="codebox">for each segment:
     cost[0] = 0
 
@@ -660,15 +698,15 @@ parentOff      match offset, or zero for literals</pre>
     require cost[segN] to be finite
     follow parent[] backward from segment end
     replay the recovered path into BlockBuilder</pre>
-        <p>The word "relax" is the standard shortest-path operation: if a newly discovered route to a future position is cheaper than the old route, replace the old route and remember where it came from.</p>
+        <p>"Relax" is the standard shortest-path word for a very practical act: if a newly found route to a future byte is cheaper, erase the old price and keep the new receipt.</p>
       </div>
       <div>
         <h3>Why the graph has no cycles</h3>
-        <p>Every edge moves forward. A literal moves from <code>rel</code> to <code>rel + 1</code>. A match moves from <code>rel</code> to <code>rel + len</code>. There is no backward edge, so the parser does not need Dijkstra, a heap, or repeated passes.</p>
+        <p>Every edge moves forward. A literal goes from <code>rel</code> to <code>rel + 1</code>. A match goes from <code>rel</code> to <code>rel + len</code>. Nothing points backward, so the parser does not need Dijkstra, a heap, or repeated passes.</p>
         <h3>Why parent pointers are enough</h3>
-        <p>Once <code>cost[segN]</code> is final, the cheapest path is encoded in reverse by <code>parent[]</code>. A missing parent marks a literal stretch; a real predecessor marks a match jump with <code>parentLen</code> and <code>parentOff</code>.</p>
+        <p>Once <code>cost[segN]</code> is final, the route is written backward in <code>parent[]</code>. A missing parent marks a literal stretch; a real predecessor marks a match jump with <code>parentLen</code> and <code>parentOff</code>.</p>
         <h3>Why replay instead of emitting immediately</h3>
-        <p>Immediate emission would make the parser greedy again. Frontier mode first decides the whole segment path, then emits. That separation is the entire trick.</p>
+        <p>Immediate emission would put the parser back in the local-choice trap. Frontier mode first decides the whole segment route, then emits. That pause is the trick.</p>
       </div>
     </div>
   </section>
@@ -676,14 +714,14 @@ parentOff      match offset, or zero for literals</pre>
   <section>
     <div class="wrap grid">
       <div>
-        <h2>The binary tree under the frontier</h2>
-        <p class="lead">The frontier table decides which path is cheapest. The binary tree supplies the jump edges cheaply enough to make that decision practical.</p>
-        <p>For each 4-byte hash, ZX2 keeps a tree of previous positions whose next bytes begin the same way. Each node is an old source position. One child points toward lexicographically smaller suffixes; the other points toward larger suffixes.</p>
-        <p>At a new position, the compressor descends that tree. Each visited old position is both a possible match and a routing comparison for insertion. The walk measures the common prefix, scores the match if it can save bits, then splices the current position into the same tree.</p>
-        <p>The clever detail is the LCP bookkeeping: the walk carries lower bounds from the small and large sides, so repeated byte comparisons are skipped. This keeps the search closer to "compare what is still unknown" than "restart the string compare at byte zero".</p>
+        <h2>The tree that finds shortcuts</h2>
+        <p class="lead">The frontier table decides which route is cheapest. The binary tree supplies the shortcuts quickly enough for that decision to be worth making.</p>
+        <p>For each 4-byte hash, ZX2 keeps a tree of previous positions whose next bytes start the same way. Each node is an old source position. One child points toward lexicographically smaller suffixes; the other points toward larger suffixes.</p>
+        <p>At a new position, the compressor descends that tree. Every visited old position is both a candidate match and a comparison point for insertion. The walk measures the common prefix, scores the match if it saves bits, then splices the current position into the same tree.</p>
+        <p>The neat trick is the LCP bookkeeping: the walk carries lower bounds from the small and large sides, so it does not keep rereading bytes it already knows are equal. The search spends its attention on the first unknown byte, where the decision actually lives.</p>
         <div class="mini">
-          <div><b><code>hashes[h]</code></b><span>The root old position for this 4-byte hash bucket.</span></div>
-          <div><b><code>btLinks[pos]</code></b><span>The two child links for one old source position, stored in a window-sized ring.</span></div>
+          <div><b><code>hashes[h]</code></b><span>The doorway into the old positions for this 4-byte hash bucket.</span></div>
+          <div><b><code>btLinks[pos]</code></b><span>The two child links for one old source position, packed into a window-sized ring.</span></div>
           <div><b><code>small</code> / <code>large</code></b><span>The binary-search-tree split over suffix order, stored as compact child deltas.</span></div>
           <div><b>LCP bounds</b><span>The known common-prefix lengths from both sides. They are a search-time cache, not stream data.</span></div>
         </div>
@@ -702,8 +740,8 @@ while node is inside the window:
       <figure class="figure">
         <svg viewBox="0 0 760 470" role="img" aria-label="binary tree match search">
           <rect width="760" height="470" fill="#fffdfa"/>
-          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">One tree walk: search plus insert</text>
-          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The current string descends through older strings in the same hash bucket.</text>
+          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">One tree walk, two jobs</text>
+          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The current string searches old strings and installs itself for later.</text>
           <g transform="translate(382 210)" font-family="ui-sans-serif, system-ui" text-anchor="middle">
             <g stroke="#d8d2c5" stroke-width="4" fill="none">
               <path d="M0 0 L-180 110"/><path d="M0 0 L180 110"/>
@@ -725,7 +763,7 @@ while node is inside the window:
             <path class="draw" d="M0 0 L-180 110 L-95 220" stroke="#087d78" stroke-width="7" fill="none" stroke-linecap="round"/>
           </g>
         </svg>
-        <figcaption class="caption">This tree is temporary encoder state. It is not stored in the compressed output; it only helps the frontier parser discover match edges cheaply enough.</figcaption>
+        <figcaption class="caption">The tree is scaffolding for the encoder. None of it reaches the compressed stream; it only helps the parser find plausible shortcuts.</figcaption>
       </figure>
     </div>
   </section>
@@ -733,10 +771,10 @@ while node is inside the window:
   <section>
     <div class="wrap grid">
       <div>
-        <h2>Segments are a speed bargain</h2>
-        <p class="lead">A whole-block optimal parser would let an early decision compete with every later consequence. ZX2 deliberately refuses that bill.</p>
-        <p>Inside a segment, it finds the best path under its candidate model. At the boundary, it commits. That is why the arrays are sized by <code>ZX2_FRONTIER_SEGMENT + 1</code> instead of by the whole block: memory stays bounded, cache behavior stays sane, and the parser has a fixed horizon.</p>
-        <p>One continuity rule is worth keeping: pending literals can cross a segment boundary. If one segment ends with raw bytes and the next begins with raw bytes, ZX2 can keep them as one literal run, preserving the literal-extension accounting.</p>
+        <h2>Segments keep the bill bounded</h2>
+        <p class="lead">A whole-block optimal parser would let an early decision argue with every later consequence. ZX2 declines that invoice.</p>
+        <p>Inside a segment, it finds the best route under its candidate model. At the boundary, it commits. That is why the arrays are sized by <code>ZX2_FRONTIER_SEGMENT + 1</code> instead of by the whole block: memory stays bounded, cache behavior stays sane, and the parser has a fixed horizon.</p>
+        <p>One border rule is worth keeping: pending literals can cross a segment boundary. If one segment ends with raw bytes and the next begins with raw bytes, ZX2 can keep them as one literal run, preserving the literal-extension accounting.</p>
       </div>
       <figure class="figure">
         <svg viewBox="0 0 760 390" role="img" aria-label="segments with carried literal state">
@@ -758,7 +796,7 @@ while node is inside the window:
             <text x="260" y="122" fill="#aa7600" font-size="14">literal run can continue</text>
           </g>
         </svg>
-        <figcaption class="caption">The segment boundary limits parser lookahead, not the encoded block format.</figcaption>
+        <figcaption class="caption">The segment boundary is a parser horizon, not a wall in the encoded format.</figcaption>
       </figure>
     </div>
   </section>
@@ -766,23 +804,23 @@ while node is inside the window:
   <section class="band">
     <div class="wrap grid">
       <div>
-        <h2>Why this is not full optimal parsing</h2>
-        <p>The word "frontier" can sound grander than the code. ZX2 frontier mode is intentionally narrow.</p>
-        <p>It keeps one winning state per byte position: one cost, one literal-extension countdown, one parent. It also takes one best scored match from the BT at each start position. It does not preserve a portfolio of near-tie literal phases, multiple lengths for the same offset, or several offsets whose prices are close.</p>
-        <p>That is the right compromise for this compressor: much less myopic than greedy lazy parsing, but still small enough to reason about and cheap enough to run as an encoder mode.</p>
+        <h2>Not the royal optimal parser</h2>
+        <p>"Frontier" sounds grand, but the code is intentionally disciplined.</p>
+        <p>It keeps one winning state per byte position: one cost, one literal-extension countdown, one parent. It also takes one best scored match from the BT at each start position. It does not keep a cabinet of near-tie literal phases, multiple lengths for the same offset, or several offsets whose prices are close.</p>
+        <p>That restraint is the point: far less blinkered than greedy lazy parsing, but still small enough to reason about and cheap enough to run as an encoder mode.</p>
       </div>
       <div class="split">
         <div class="note">
           <strong>Greedy</strong>
-          <p>Take the best local match, maybe with one lazy lookahead. Fast, but easily fooled.</p>
+          <p>Take the best local match, maybe with one lazy peek. Fast, but easy to bait.</p>
         </div>
         <div class="note" style="border-left-color: var(--red)">
           <strong>Frontier</strong>
-          <p>Keep the cheapest surviving state at each byte. Better local-global tradeoff, still compact.</p>
+          <p>Keep the cheapest surviving state at each byte. Broader view, still compact.</p>
         </div>
         <div class="note" style="border-left-color: var(--blue)">
           <strong>Optimal</strong>
-          <p>Keep many competing states and candidates. Stronger ratio, much more parser work.</p>
+          <p>Keep many competing states and candidates. Stronger ratio, much larger bill.</p>
         </div>
       </div>
     </div>
@@ -790,92 +828,92 @@ while node is inside the window:
 
   <section>
     <div class="wrap">
-      <h2>The knobs and what they really control</h2>
-      <p class="wide">ZX2 has two kinds of parameters. Some change the stream format or decoder assumptions; those are architectural. Others only change how hard the encoder searches before it writes the same kind of stream. Mixing those up makes the frontier parser harder to reason about than it is.</p>
+      <h2>The knobs, sorted by danger</h2>
+      <p class="wide">ZX2 has knobs that change the language of the stream, and knobs that merely decide how hard the encoder hunts before speaking that language. Confuse those two and the parser starts looking mysterious. Keep them separate and most of the machinery becomes pleasantly ordinary.</p>
       <div class="knobs">
         <div class="knob">
           <h3><code>algorithm</code><span class="tag">parser</span></h3>
-          <p>Selects the parsing strategy. <code>Lazy</code> is the faster local parser. <code>Frontier</code> spends more encoder work to solve a segmented path problem. This changes which tokens are emitted, but the decoder still reads the same ZX2 stream family.</p>
+          <p>Selects the parser's temperament. <code>Lazy</code> makes quick local choices. <code>Frontier</code> spends encoder work to plan a segment route. The emitted tokens change, but the decoder still reads the same ZX2 stream family.</p>
           <div class="direction"><span>fast local choices</span><i></i><span>slower segment planning</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_TOKEN_LIT_BITS</code> / <code>ZX2_TOKEN_MATCH_BITS</code><span class="tag format">format</span></h3>
-          <p>Controls how one token byte is split between literal-run length and match length. The current 3/5 split gives small literal lengths in the token and more match-length room before extensions. Changing this reshapes both the stream and the parser cost table.</p>
+          <p>Controls how one token byte is divided between literal-run length and match length. The current 3/5 split gives little token room to literals and more room to match length before extensions. Change it and both the stream format and the parser ledger change.</p>
           <div class="direction"><span>more literal token room</span><i></i><span>more match token room</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_MATCH_OFFSET_BITS_VALUE</code><span class="tag format">format</span></h3>
-          <p>Controls how many bits are available for match offsets: 16, 18, 20, or 22 in this source. More bits let a match refer farther back, improving ratio on long-range repetition. They also make every match offset more expensive and change the encoded stream layout.</p>
+          <p>Controls how far back a match may point: 16, 18, 20, or 22 bits in this source. More reach can rescue long-range repetition, but every match pays the larger offset price.</p>
           <div class="direction"><span>smaller, faster offsets</span><i></i><span>larger history reach</span></div>
         </div>
         <div class="knob">
           <h3><code>windowKB</code><span class="tag">search</span></h3>
-          <p>Caps how much previous input the compressor is allowed to search. It is clipped by the encoded offset range, so a huge window cannot exceed what the offset bits can represent. Larger windows may find older matches, but they increase parser memory and search pressure.</p>
+          <p>Caps how much previous input the compressor may search. It is clipped by the encoded offset range, so a huge window cannot point beyond what the offset bits can name. Larger windows can find older treasure; they also bring more memory and search pressure.</p>
           <div class="direction"><span>less memory</span><i></i><span>more long-range matches</span></div>
         </div>
         <div class="knob">
           <h3><code>hashBits</code><span class="tag speed">match finder</span></h3>
-          <p>Sets the number of hash buckets for the 4-byte match key. More buckets usually mean shorter collision chains and cleaner candidates, at the cost of a larger hash table. Too few buckets make unrelated positions compete in the same bucket.</p>
+          <p>Sets the number of hash buckets for the 4-byte match key. More buckets usually mean shorter collision chains and cleaner candidates, at the cost of a larger table. Too few buckets turn unrelated positions into noisy neighbors.</p>
           <div class="direction"><span>smaller table</span><i></i><span>cleaner buckets</span></div>
         </div>
         <div class="knob">
           <h3><code>maxChain</code><span class="tag speed">match finder</span></h3>
-          <p>Limits how many old candidates the matcher examines at one position. This is the main compression-speed dial: higher values search harder and can improve ratio, but every extra probe happens inside a very hot encoder loop.</p>
+          <p>Limits how many old candidates the matcher examines at one position. This is the main compression-speed dial: higher values search harder and can improve ratio, but every extra probe lands in a very hot encoder loop.</p>
           <div class="direction"><span>faster encode</span><i></i><span>better candidate search</span></div>
         </div>
         <div class="knob">
           <h3><code>chainBits</code><span class="tag speed">storage</span></h3>
-          <p>Controls the ring size used for match links. Frontier mode's binary tree requires it to match the window bits, because tree child references are stored as deltas inside that window-sized ring. Lazy mode can use row storage instead.</p>
+          <p>Controls the ring size used for match links. Frontier mode's binary tree wants this to match the window bits, because child references are stored as deltas in that window-sized ring. Lazy mode can use row storage instead.</p>
           <div class="direction"><span>smaller link ring</span><i></i><span>full-window BT links</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_FRONTIER_SEGMENT_VALUE</code><span class="tag">frontier</span></h3>
-          <p>Sets the byte length of one dynamic-programming problem. Larger segments give the parser a longer horizon and larger arrays; smaller segments commit sooner and spend less state. It changes encoder decisions, not the decoder format.</p>
+          <p>Sets the byte length of one route-planning problem. Larger segments give the parser a longer horizon and larger arrays; smaller segments commit sooner and spend less state. It changes encoder decisions, not the decoder format.</p>
           <div class="direction"><span>less parser state</span><i></i><span>longer planning horizon</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_FRONTIER_GOOD_ENOUGH_LENGTH_VALUE</code><span class="tag speed">frontier</span></h3>
-          <p>Allows frontier's BT search to stop scoring once it has found a match of a chosen length. Zero means disabled. It is a speed shortcut: useful only if the early stop does not discard matches that would alter the segment path.</p>
+          <p>Lets the BT search stop scoring once it has found a match of a chosen length. Zero means disabled. It is a speed shortcut, and like all shortcuts it is only good when it does not skip the road you needed.</p>
           <div class="direction"><span>exhaustive scoring</span><i></i><span>earlier stop</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_FRONTIER_SKIP_PERIOD_VALUE</code><span class="tag speed">frontier</span></h3>
-          <p>Skips insertion on a regular cadence while still walking the existing BT for scoring. It reduces tree churn and memory traffic, but it also removes some future source positions from consideration.</p>
+          <p>Skips insertion on a regular cadence while still walking the existing BT for scoring. It reduces tree churn and memory traffic, but some future positions never get added to the shortcut catalog.</p>
           <div class="direction"><span>denser BT history</span><i></i><span>less insertion work</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_MIN_MATCH_LENGTH_VALUE</code><span class="tag format">format</span></h3>
-          <p>Defines the shortest legal match length. The current default is 4. Raising it removes short-match choices and simplifies some decisions, but it can lose real compression opportunities. It also changes the meaning of match length codes.</p>
+          <p>Defines the shortest legal match length. The current default is 4. Raising it removes fiddly short-match choices and simplifies some decisions, but it can throw away real wins. It also changes the meaning of match length codes.</p>
           <div class="direction"><span>more short matches</span><i></i><span>fewer candidates</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_MIN_OFFSET</code><span class="tag format">decoder</span></h3>
-          <p>Sets the closest allowed backward copy. The current value, 32, is deliberate: it makes short decoded match copies non-overlapping, which lets the decoder use simple 32-byte vector copies. Lower offsets might find a few extra matches but complicate fast copy behavior.</p>
+          <p>Sets the closest allowed backward copy. The current value, 32, is deliberate: short decoded match copies become non-overlapping, so the decoder can use simple 32-byte vector copies. Lower offsets might find a few extra matches but make fast copy behavior messier.</p>
           <div class="direction"><span>more nearby matches</span><i></i><span>simpler fast copies</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_MIN_MATCH_GAIN8_VALUE</code><span class="tag">parser bias</span></h3>
-          <p>Requires a match to beat literals by extra cost before it is accepted by the lazy scorer. It is a conservative bias against marginal matches. Frontier mostly uses the direct parser save table, but the idea is the same: tiny wins are not always worth extra match ops.</p>
+          <p>Requires a match to beat literals by extra cost before the lazy scorer accepts it. It is a bias against marginal matches. Frontier mostly uses the direct parser save table, but the philosophy is the same: tiny wins are not always worth another match op.</p>
           <div class="direction"><span>accept marginal wins</span><i></i><span>demand clearer wins</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_ZERO_LIT_MATCH_PENALTY8_VALUE</code><span class="tag">parser bias</span></h3>
-          <p>Adds a parser-only penalty when a match follows a previous match with no literal bytes between them. This discourages dense chains of tiny matches, often helping decode speed by reducing match op count while spending a little ratio.</p>
+          <p>Adds a parser-only penalty when a match follows a previous match with no literal bytes between them. It discourages dense chains of tiny matches, often buying decode speed with a little ratio.</p>
           <div class="direction"><span>more match chaining</span><i></i><span>fewer zero-lit matches</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_MATCH_INSERT_LIMIT_VALUE</code><span class="tag speed">parser policy</span></h3>
-          <p>Caps how many interior positions of an emitted match are inserted into match search. Zero means no artificial cap in this source. A cap can speed future searches and avoid noisy candidates, but it is a parser policy rather than a format rule.</p>
+          <p>Caps how many interior positions of an emitted match are inserted into match search. Zero means no artificial cap in this source. A cap can speed future searches and reduce noisy candidates, but it is parser policy, not stream law.</p>
           <div class="direction"><span>full insertion</span><i></i><span>less interior work</span></div>
         </div>
         <div class="knob">
           <h3><code>blockBytes</code><span class="tag">block shape</span></h3>
-          <p>Controls how much input goes into one ZX2 block. Blocks reset some output organization and bound memory use. A small block limits long-range opportunities across block boundaries; a huge block lets the parser and output streams work over more data at once.</p>
+          <p>Controls how much input goes into one ZX2 block. Blocks reset some output organization and bound memory use. Small blocks cut off long-range opportunities; huge blocks let the parser and output streams work over more data at once.</p>
           <div class="direction"><span>smaller blocks</span><i></i><span>more continuity</span></div>
         </div>
         <div class="knob">
           <h3><code>huffman</code><span class="tag format">second pass</span></h3>
-          <p>Optionally Huffman-compresses the split streams after the LZ parse. It changes the block payload representation but not the frontier decision process itself. Useful when the extra encode/decode stage wins enough bytes to justify the work.</p>
+          <p>Optionally Huffman-compresses the split streams after the LZ parse. It changes the block payload representation, not the frontier decision process itself. Useful when the extra encode/decode stage wins enough bytes to pay rent.</p>
           <div class="direction"><span>raw split streams</span><i></i><span>extra entropy pass</span></div>
         </div>
       </div>
@@ -884,8 +922,8 @@ while node is inside the window:
 
   <section>
     <div class="wrap">
-      <h2>What the frontier buys, and what it spends</h2>
-      <p class="wide">Frontier is best understood as a ratio mode, not a decoder idea. It spends compression CPU and encoder memory to choose better tokens, while leaving decompression on the same simple ZX2 stream.</p>
+      <h2>What frontier buys</h2>
+      <p class="wide">Frontier is a ratio mode, not a decoder idea. It spends compression CPU and encoder memory to choose better tokens, while decompression stays on the same simple ZX2 stream.</p>
       <div class="tablewrap">
         <table class="compare" aria-label="parser tradeoff table">
           <thead>
@@ -900,13 +938,13 @@ while node is inside the window:
             </tr>
             <tr>
               <td><strong>Frontier</strong></td>
-              <td>What is the cheapest path through this segment?</td>
+              <td>What is the cheapest route through this segment?</td>
               <td>Finds non-local wins inside the segment using actual ZX2 token costs.</td>
               <td>Visits every byte, walks the BT, and stores traceback state.</td>
             </tr>
             <tr>
               <td><strong>Rich optimal</strong></td>
-              <td>Which of many competing states will age best?</td>
+              <td>Which competing states deserve to survive?</td>
               <td>Potentially better ratio, especially with many near-tie candidates.</td>
               <td>More memory, more branches, more candidate generation, harder tuning.</td>
             </tr>
@@ -916,11 +954,11 @@ while node is inside the window:
       <div class="two">
         <div class="note">
           <strong>Decoder stays clean</strong>
-          <p>The compressed bytes are still ordinary ZX2 tokens. Frontier changes how the encoder chooses them, not how the decoder reads them.</p>
+          <p>The compressed bytes are still ordinary ZX2 tokens. Frontier changes the encoder's choices, not the decoder's grammar.</p>
         </div>
         <div class="note" style="border-left-color: var(--red)">
           <strong>Compressor pays</strong>
-          <p>Every source byte becomes a parser state. Every state walks the binary-tree matcher. That is the expensive part.</p>
+          <p>Every source byte becomes a parser state. Every state walks the binary-tree matcher. That is where the invoice grows.</p>
         </div>
       </div>
     </div>
@@ -929,8 +967,8 @@ while node is inside the window:
   <section class="band">
     <div class="wrap grid">
       <div>
-        <h2>Where to look in the source</h2>
-        <p>The core is short enough to read directly once the mental model is in place.</p>
+        <h2>Where the machinery lives</h2>
+        <p>Once the map-and-ledger model is in your head, the source is short enough to read directly.</p>
         <div class="mini">
           <div><b>Constants</b><span><code>ZX2_FRONTIER_SEGMENT</code>, token bit split, offset width, and literal/match cost functions live near the top of <code>Core/misc/ZX2.hpp</code>.</span></div>
           <div><b>BT node links</b><span><code>BTLink</code> and <code>BTChildRef</code> define the compact small/large child links used by the binary tree.</span></div>
@@ -941,9 +979,9 @@ while node is inside the window:
       </div>
       <div>
         <h3>The most important tiny detail</h3>
-        <p>The parser does not emit while it is deciding. It records possible futures first. That separation is what turns a pile of match searches into a path problem.</p>
+        <p>The parser does not emit while it is deciding. It records possible futures first. That small act of patience turns a pile of match searches into a path problem.</p>
         <h3>The second most important detail</h3>
-        <p>The cost model is tied to the actual stream format. Change token layout, offset width, or extension thresholds, and the parser's idea of a good path changes with them.</p>
+        <p>The cost model is tied to the actual stream format. Change token layout, offset width, or extension thresholds, and the parser's taste changes with them.</p>
       </div>
     </div>
   </section>
@@ -951,10 +989,10 @@ while node is inside the window:
   <section>
     <div class="wrap grid">
       <div>
-        <h2>The useful mental model</h2>
-        <p class="lead">ZX2 frontier mode is a small pathfinder living inside the compressor.</p>
-        <p>It walks a fixed-size segment. At every byte it asks: buy one more literal, or jump with the best match the BT can justify? It records the cheapest known way to stand at future byte boundaries. At the end, traceback turns those remembered choices into ordinary ZX2 tokens.</p>
-        <p>The decoder never sees any of this. The output is still literal lengths, match lengths, offsets, and extension bytes. Frontier is an encoder-only luxury: pay compression time now, usually get fewer bytes later.</p>
+        <h2>The pocket model</h2>
+        <p class="lead">ZX2 frontier mode is a tiny route planner hidden inside the compressor.</p>
+        <p>It walks a fixed-size segment. At every byte it asks: buy one more literal, or jump with the best match the BT can justify? It records the cheapest known way to stand at future byte boundaries. At the end, traceback turns those remembered receipts into ordinary ZX2 tokens.</p>
+        <p>The decoder never sees the planning. The output is still literal lengths, match lengths, offsets, and extension bytes. Frontier is encoder-only luxury: pay compression time now, usually get fewer bytes later.</p>
       </div>
       <figure class="figure">
         <svg viewBox="0 0 760 360" role="img" aria-label="traceback path">
@@ -970,8 +1008,8 @@ while node is inside the window:
             <path d="M440 -18 H528" stroke="#aa7600" stroke-width="8" stroke-linecap="round"/>
             <path d="M528 0 C560 -70 584 -70 616 0" fill="none" stroke="#3768a6" stroke-width="8" stroke-linecap="round"/>
           </g>
-          <text x="72" y="60" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">Traceback turns costs into tokens</text>
-          <text x="72" y="92" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The best path is replayed through BlockBuilder, so the file format stays unchanged.</text>
+          <text x="72" y="60" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">Traceback cashes the receipts</text>
+          <text x="72" y="92" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The chosen route is replayed through BlockBuilder; the file format stays unchanged.</text>
         </svg>
         <div class="legend">
           <span class="key"><i class="swatch gold"></i>literal run</span>
@@ -988,13 +1026,33 @@ while node is inside the window:
   const bytes = document.getElementById("bytes");
   const grid = document.getElementById("costgrid");
   const status = document.getElementById("status");
+  const routeNote = document.getElementById("routeNote");
+  const greedyRoute = document.getElementById("greedyRoute");
+  const frontierRoute = document.getElementById("frontierRoute");
   const statuses = [
-    "Start: position 0 is free. Everything else is unknown.",
-    "Literal edges advance one byte. They are boring, but they always work.",
-    "A match edge jumps over several bytes when it is cheaper than spelling them.",
+    "Start: position 0 costs nothing. The rest of the ledger is blank.",
+    "Literal edges advance one byte. Plain, dependable, not always cheap.",
+    "A match edge jumps over bytes when it beats spelling them out.",
     "The table keeps only the cheapest known way to stand at each position.",
-    "At the end, parent pointers reconstruct the path and BlockBuilder emits it."
+    "At the end, parent pointers walk the route backward and BlockBuilder emits it."
   ];
+  const routeCopy = {
+    greedy: "The local parser grabs the early match. It looks tidy, but it may spend the start of a better later match.",
+    frontier: "Frontier prices the whole segment before committing, so the later larger jump can beat the tempting local shortcut."
+  };
+
+  document.querySelectorAll("[data-route]").forEach(button => {
+    button.addEventListener("click", () => {
+      const frontier = button.dataset.route === "frontier";
+      document.querySelectorAll("[data-route]").forEach(b => b.classList.toggle("active", b === button));
+      greedyRoute.classList.toggle("dim", frontier);
+      greedyRoute.classList.toggle("hotline", !frontier);
+      frontierRoute.classList.toggle("dim", !frontier);
+      frontierRoute.classList.toggle("hotline", frontier);
+      routeNote.textContent = routeCopy[button.dataset.route];
+    });
+  });
+  greedyRoute.classList.add("hotline");
 
   letters.forEach((x, i) => {
     const b = document.createElement("div");
