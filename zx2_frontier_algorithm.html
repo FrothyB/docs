@@ -1,0 +1,1039 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZX2 Frontier Parser</title>
+<style>
+  :root {
+    color-scheme: light;
+    --ink: #13201c;
+    --muted: #5f6f69;
+    --paper: #f7faf8;
+    --band: #eaf1ee;
+    --line: #c9d7d1;
+    --teal: #087d78;
+    --red: #b43d45;
+    --blue: #3768a6;
+    --gold: #aa7600;
+    --green: #5b7f31;
+    --code: #222a32;
+    --white: #ffffff;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 17px/1.62 ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  }
+  a { color: var(--teal); }
+  .wrap { width: min(1120px, calc(100vw - 36px)); margin: 0 auto; }
+  .hero {
+    min-height: 92vh;
+    display: grid;
+    align-items: end;
+    padding: 42px 0 7vh;
+    background:
+      linear-gradient(180deg, rgba(247,250,248,.97), rgba(247,250,248,.72) 34%, rgba(247,250,248,.99)),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Crect width='1600' height='900' fill='%23dfe9e4'/%3E%3Cg fill='none' stroke='%2396aaa1' stroke-width='2' opacity='.58'%3E%3Cpath d='M0 710 C180 610 320 820 510 690 S830 540 1040 660 1390 700 1600 560'/%3E%3Cpath d='M0 590 C210 520 270 660 460 570 S750 430 960 520 1290 600 1600 420'/%3E%3Cpath d='M0 450 C220 380 310 510 520 430 S820 300 1050 390 1330 460 1600 290'/%3E%3C/g%3E%3Cg opacity='.95'%3E%3Cpath d='M110 655 H1380' stroke='%2313201c' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M180 655 C270 530 360 530 450 655' stroke='%23087d78' stroke-width='9' fill='none' stroke-linecap='round'/%3E%3Cpath d='M450 655 C590 470 720 470 860 655' stroke='%23b43d45' stroke-width='9' fill='none' stroke-linecap='round'/%3E%3Cpath d='M860 655 C950 545 1040 545 1130 655' stroke='%233768a6' stroke-width='9' fill='none' stroke-linecap='round'/%3E%3Cg fill='%2313201c'%3E%3Ccircle cx='180' cy='655' r='10'/%3E%3Ccircle cx='450' cy='655' r='10'/%3E%3Ccircle cx='860' cy='655' r='10'/%3E%3Ccircle cx='1130' cy='655' r='10'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    background-size: cover;
+    background-position: center;
+  }
+  .hero h1 {
+    max-width: 850px;
+    margin: 0 0 18px;
+    font: 700 96px/.92 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    letter-spacing: 0;
+  }
+  .dek {
+    max-width: 740px;
+    margin: 0;
+    font: 500 29px/1.22 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    color: #24302b;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 28px;
+    font: 700 12px/1 ui-sans-serif, system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0;
+  }
+  .pill {
+    padding: 8px 10px;
+    border: 1px solid rgba(23,32,28,.22);
+    background: rgba(255,253,250,.82);
+    border-radius: 6px;
+  }
+  section { padding: 72px 0; }
+  section.band { background: var(--band); border-block: 1px solid var(--line); }
+  h2 {
+    margin: 0 0 22px;
+    font: 750 48px/1.02 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    letter-spacing: 0;
+  }
+  h3 {
+    margin: 34px 0 10px;
+    font: 750 22px/1.12 ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+  p { max-width: 760px; margin: 0 0 18px; }
+  code {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(23,32,28,.08);
+    font: .88em/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .lead { font-size: 22px; line-height: 1.42; color: #293530; }
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.02fr) minmax(320px, .98fr);
+    gap: 34px;
+    align-items: start;
+  }
+  .figure {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+    overflow: hidden;
+    box-shadow: 0 18px 45px rgba(55,48,37,.08);
+  }
+  .figure svg { display: block; width: 100%; height: auto; }
+  .caption {
+    border-top: 1px solid var(--line);
+    padding: 13px 16px;
+    color: var(--muted);
+    font: 14px/1.38 ui-sans-serif, system-ui, sans-serif;
+  }
+  .rail {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin: 26px 0 0;
+  }
+  .rail span {
+    min-height: 52px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--white);
+    font: 800 18px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .rail .hot { color: var(--red); border-color: rgba(180,61,69,.42); }
+  .rail .cool { color: var(--teal); border-color: rgba(8,125,120,.42); }
+  .codebox {
+    margin: 24px 0 0;
+    padding: 18px;
+    border-radius: 8px;
+    background: var(--code);
+    color: #eef4ee;
+    overflow-x: auto;
+    font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .split {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 28px;
+  }
+  .two {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 26px;
+  }
+  .wide { max-width: 920px; }
+  .note {
+    border-left: 4px solid var(--teal);
+    padding: 16px 18px;
+    background: var(--white);
+    border-radius: 0 8px 8px 0;
+  }
+  .note strong {
+    display: block;
+    margin-bottom: 8px;
+    font: 800 15px/1 ui-sans-serif, system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0;
+  }
+  .mini {
+    display: grid;
+    gap: 10px;
+    margin-top: 22px;
+    max-width: 820px;
+  }
+  .mini div {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .mini b {
+    font: 800 14px/1.2 ui-sans-serif, system-ui, sans-serif;
+    color: var(--teal);
+  }
+  .mini span { color: #303a36; }
+  .formula {
+    margin: 24px 0;
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+    font: 700 18px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #26302c;
+  }
+  .score {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .score div {
+    min-height: 92px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+  }
+  .score b {
+    display: block;
+    margin-bottom: 10px;
+    font: 800 13px/1 ui-sans-serif, system-ui, sans-serif;
+    color: var(--muted);
+  }
+  .score span {
+    font: 850 24px/1 ui-sans-serif, system-ui, sans-serif;
+    color: var(--ink);
+  }
+  .compare {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 24px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+    font: 15px/1.35 ui-sans-serif, system-ui, sans-serif;
+  }
+  .compare th, .compare td { padding: 13px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .compare th { background: #eef5f2; font-weight: 850; }
+  .compare tr:last-child td { border-bottom: 0; }
+  .tablewrap {
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+  }
+  .tablewrap .compare { margin-top: 0; border: 0; border-radius: 0; min-width: 760px; }
+  .knobs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 24px;
+  }
+  .knob {
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+  }
+  .knob h3 {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+    margin: 0 0 9px;
+  }
+  .knob h3 code { font-size: 14px; }
+  .tag {
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #f0fbf8;
+    color: var(--teal);
+    font: 800 11px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .tag.format { background: #fff1ee; color: var(--red); }
+  .tag.speed { background: #f2f7ef; color: var(--gold); }
+  .knob p { margin-bottom: 0; font-size: 15px; line-height: 1.48; }
+  .direction {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+    margin-top: 12px;
+    color: var(--muted);
+    font: 800 12px/1.2 ui-sans-serif, system-ui, sans-serif;
+  }
+  .direction i {
+    height: 5px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--teal), var(--gold), var(--red));
+  }
+  .sim {
+    padding: 20px;
+  }
+  .bytes {
+    display: grid;
+    grid-template-columns: repeat(18, 1fr);
+    gap: 5px;
+    margin: 8px 0 24px;
+  }
+  .byte {
+    min-height: 34px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #f1f6f3;
+    color: #3c4642;
+    font: 800 13px/1 ui-monospace, monospace;
+    transition: background .25s, color .25s, transform .25s, border-color .25s;
+  }
+  .byte.now { background: var(--ink); color: white; transform: translateY(-3px); }
+  .byte.match { background: #e4f2ef; border-color: rgba(8,125,120,.45); color: var(--teal); }
+  .costgrid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 6px;
+  }
+  .cell {
+    min-height: 50px;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: white;
+    font: 700 13px/1.1 ui-sans-serif, system-ui, sans-serif;
+    transition: transform .25s, border-color .25s, background .25s;
+  }
+  .cell small { color: var(--muted); font: 700 10px/1 ui-monospace, monospace; }
+  .cell.live { border-color: var(--red); background: #fff1ee; transform: translateY(-3px); }
+  .cell.done { border-color: rgba(8,125,120,.42); background: #f0fbf8; }
+  .status {
+    margin-top: 16px;
+    min-height: 48px;
+    color: #303a36;
+    font: 700 15px/1.35 ui-sans-serif, system-ui, sans-serif;
+  }
+  .timeline {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    max-width: 820px;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+  }
+  .num {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ink);
+    color: white;
+    font: 800 15px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .step p { margin: 0; }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding: 12px 16px 16px;
+    border-top: 1px solid var(--line);
+    font: 700 13px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .key { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 18px; height: 5px; border-radius: 5px; background: var(--teal); }
+  .swatch.red { background: var(--red); }
+  .swatch.blue { background: var(--blue); }
+  .swatch.gold { background: var(--gold); }
+  .statecards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 22px;
+  }
+  .statecard {
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+    font: 14px/1.4 ui-sans-serif, system-ui, sans-serif;
+  }
+  .statecard b {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--ink);
+    font: 850 13px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .statecard code { font-size: 12px; }
+  .pulse { animation: pulse 2.2s ease-in-out infinite; }
+  .march { animation: march 5.5s linear infinite; }
+  .draw { stroke-dasharray: 460; stroke-dashoffset: 460; animation: draw 4.8s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: .34; } 45% { opacity: 1; } }
+  @keyframes march { 0% { transform: translateX(0); } 100% { transform: translateX(382px); } }
+  @keyframes draw { 0% { stroke-dashoffset: 460; } 45%, 72% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -460; } }
+
+  @media (max-width: 820px) {
+    body { font-size: 16px; }
+    .hero { min-height: 86vh; padding-bottom: 48px; }
+    .hero h1 { font-size: 52px; }
+    .dek { font-size: 22px; }
+    h2 { font-size: 32px; }
+    .grid, .split, .two, .score, .knobs, .statecards { grid-template-columns: 1fr; }
+    .mini div { grid-template-columns: 1fr; gap: 6px; }
+    .rail { grid-template-columns: repeat(3, 1fr); }
+    .bytes { grid-template-columns: repeat(9, 1fr); }
+    .costgrid { grid-template-columns: repeat(5, 1fr); }
+  }
+</style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <h1>The ZX2 frontier parser</h1>
+      <p class="dek">Frontier mode turns LZ parsing from a local hunch into a shortest-path problem: pay literals, buy matches, and let the cheapest route through the segment win.</p>
+      <div class="meta">
+        <span class="pill">Core/misc/ZX2.hpp</span>
+        <span class="pill">segmented dynamic programming</span>
+        <span class="pill">BT-backed match search</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="wrap grid">
+      <div>
+        <h2>Start with the real choice</h2>
+        <p class="lead">ZX2 is an LZ compressor: its output is mostly literal bytes plus instructions to copy earlier bytes. The hard part is not decoding those instructions. It is deciding where they should be.</p>
+        <p>A literal is brutally honest: spend the byte. A match is a bet: pay a token, pay offset bits, maybe pay length extensions, then hope the copied span is long enough to amortize the overhead. That is why "found a repeat" is not the same as "should emit a match".</p>
+        <p>The parser is the part of the compressor that decides where the literals and matches go. The decoder is much simpler: it just follows the final token stream. All the frontier machinery exists only while compressing.</p>
+        <div class="mini">
+          <div><b>Literal run</b><span>Raw bytes copied into the literal stream. Great when data is new, bad when it repeats.</span></div>
+          <div><b>Match</b><span>A length plus an offset. Great when the copied phrase is long enough to pay for the token and offset.</span></div>
+          <div><b>Parser</b><span>The optimizer that chooses a sequence of literal runs and matches before anything reaches the decoder.</span></div>
+        </div>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 760 430" role="img" aria-label="input bytes becoming ZX2 tokens">
+          <rect width="760" height="430" fill="#fffdfa"/>
+          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">Same bytes, different stories</text>
+          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The parser chooses which story is cheapest to encode.</text>
+          <g transform="translate(58 135)" font-family="ui-monospace, Menlo, monospace" font-size="18" font-weight="800" text-anchor="middle">
+            <g>
+              <rect x="0" y="0" width="42" height="42" rx="6" fill="#f7f5ef" stroke="#d8d2c5"/><text x="21" y="27">a</text>
+              <rect x="48" y="0" width="42" height="42" rx="6" fill="#f7f5ef" stroke="#d8d2c5"/><text x="69" y="27">b</text>
+              <rect x="96" y="0" width="42" height="42" rx="6" fill="#f7f5ef" stroke="#d8d2c5"/><text x="117" y="27">r</text>
+              <rect x="144" y="0" width="42" height="42" rx="6" fill="#f7f5ef" stroke="#d8d2c5"/><text x="165" y="27">a</text>
+              <rect x="192" y="0" width="42" height="42" rx="6" fill="#f7f5ef" stroke="#d8d2c5"/><text x="213" y="27">c</text>
+              <rect x="240" y="0" width="42" height="42" rx="6" fill="#f7f5ef" stroke="#d8d2c5"/><text x="261" y="27">a</text>
+              <rect x="300" y="0" width="42" height="42" rx="6" fill="#e4f2ef" stroke="#087d78"/><text x="321" y="27">a</text>
+              <rect x="348" y="0" width="42" height="42" rx="6" fill="#e4f2ef" stroke="#087d78"/><text x="369" y="27">b</text>
+              <rect x="396" y="0" width="42" height="42" rx="6" fill="#e4f2ef" stroke="#087d78"/><text x="417" y="27">r</text>
+              <rect x="444" y="0" width="42" height="42" rx="6" fill="#e4f2ef" stroke="#087d78"/><text x="465" y="27">a</text>
+              <rect x="492" y="0" width="42" height="42" rx="6" fill="#e4f2ef" stroke="#087d78"/><text x="513" y="27">c</text>
+              <rect x="540" y="0" width="42" height="42" rx="6" fill="#e4f2ef" stroke="#087d78"/><text x="561" y="27">a</text>
+            </g>
+          </g>
+          <g transform="translate(74 250)" font-family="ui-sans-serif, system-ui">
+            <rect x="0" y="0" width="248" height="74" rx="8" fill="#f7f5ef" stroke="#d8d2c5"/>
+            <text x="18" y="30" fill="#aa7600" font-size="15" font-weight="850">literal run</text>
+            <text x="18" y="55" fill="#17201c" font-size="18" font-weight="850">write "abraca"</text>
+            <path d="M282 37 H350" stroke="#17201c" stroke-width="3" stroke-linecap="round"/>
+            <path d="M338 25 L350 37 L338 49" fill="none" stroke="#17201c" stroke-width="3" stroke-linecap="round"/>
+            <rect x="382" y="0" width="248" height="74" rx="8" fill="#e4f2ef" stroke="#087d78"/>
+            <text x="400" y="30" fill="#087d78" font-size="15" font-weight="850">match</text>
+            <text x="400" y="55" fill="#17201c" font-size="18" font-weight="850">copy len 6, off 6</text>
+          </g>
+        </svg>
+        <figcaption class="caption">A repeat is useful only after the fixed match overhead is paid back by enough copied bytes.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap grid">
+      <div>
+        <h2>The problem with a tempting match</h2>
+        <p class="lead">Compression parsing is full of little traps. At byte 1000 you may find a decent repeated phrase and grab it. But the byte at 1001 might start a much better phrase.</p>
+        <p>The lazy parser handles the simplest version of that trap by looking one step ahead. ZX2 frontier mode goes further. It treats the next segment as a tiny map: every byte position is a place you can stand, and every literal or match is a move to another place.</p>
+        <p>The goal is not "take the best match now". The goal is "arrive at the end of this segment with the lowest encoded cost".</p>
+        <div class="rail" aria-label="toy repeated input">
+          <span class="cool">a</span><span>b</span><span>r</span><span>a</span><span>c</span><span>a</span>
+          <span class="hot">a</span><span class="hot">b</span><span class="hot">r</span><span class="hot">a</span><span class="hot">c</span><span class="hot">a</span>
+        </div>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 760 430" role="img" aria-label="literal and match paths across byte positions">
+          <rect width="760" height="430" fill="#fffdfa"/>
+          <g transform="translate(72 300)">
+            <line x1="0" y1="0" x2="616" y2="0" stroke="#17201c" stroke-width="4" stroke-linecap="round"/>
+            <g fill="#17201c" font-family="ui-monospace, Menlo, monospace" font-size="15" text-anchor="middle">
+              <text x="0" y="36">0</text><text x="88" y="36">1</text><text x="176" y="36">2</text><text x="264" y="36">3</text>
+              <text x="352" y="36">4</text><text x="440" y="36">5</text><text x="528" y="36">6</text><text x="616" y="36">7</text>
+            </g>
+            <g fill="#17201c">
+              <circle cx="0" cy="0" r="8"/><circle cx="88" cy="0" r="8"/><circle cx="176" cy="0" r="8"/><circle cx="264" cy="0" r="8"/>
+              <circle cx="352" cy="0" r="8"/><circle cx="440" cy="0" r="8"/><circle cx="528" cy="0" r="8"/><circle cx="616" cy="0" r="8"/>
+            </g>
+            <g fill="none" stroke="#aa7600" stroke-width="4" stroke-linecap="round">
+              <path d="M0 -16 H88"/><path d="M88 -16 H176"/><path d="M176 -16 H264"/><path d="M264 -16 H352"/>
+              <path d="M352 -16 H440"/><path d="M440 -16 H528"/><path d="M528 -16 H616"/>
+            </g>
+            <path class="draw" d="M88 0 C154 -112 286 -112 352 0" fill="none" stroke="#087d78" stroke-width="8" stroke-linecap="round"/>
+            <path d="M176 0 C274 -178 430 -178 528 0" fill="none" stroke="#b43d45" stroke-width="8" stroke-linecap="round"/>
+            <circle class="march" cx="0" cy="-16" r="10" fill="#3768a6"/>
+          </g>
+          <text x="72" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">A segment becomes a graph</text>
+          <text x="72" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">Short flat edges are literals. Arcs are matches. The parser chooses a path.</text>
+        </svg>
+        <figcaption class="caption">The frontier parser is just shortest path on a very special graph: byte positions only move forward, so one pass is enough.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap grid">
+      <div>
+        <h2>What "frontier" means here</h2>
+        <p>Imagine a line sweeping left to right over the segment. Behind it, the parser has already priced the cheapest known way to stand at each byte boundary. At the line, it spends that known cost into the future.</p>
+        <p>A literal edge always exists: append one raw byte and advance by one. A match edge exists only when the BT match finder returns a repeated phrase whose encoded match cost beats the same bytes as literals.</p>
+        <p>The frontier is not a queue or a geometric object in the code. It is this compact table of best-known futures:</p>
+        <pre class="codebox">cost[rel]      best cost to reach byte rel
+parent[rel]    previous position on the winning path
+parentLen      emitted literal length or match length
+parentOff      match offset, or zero for literals</pre>
+        <div class="statecards">
+          <div class="statecard"><b>One survivor</b>Each byte position keeps one winning cost. Close losers are discarded, even if they carry a different literal-run phase.</div>
+          <div class="statecard"><b>Literal phase</b><code>litExtLeft</code> remembers when the next literal byte will also force a length-extension byte.</div>
+          <div class="statecard"><b>Traceback</b><code>parent == UINT32_MAX</code> means the winning stretch is literal text; any other parent means a match jump.</div>
+        </div>
+      </div>
+      <figure class="figure sim" aria-label="animated frontier table">
+        <div class="bytes" id="bytes"></div>
+        <div class="costgrid" id="costgrid"></div>
+        <div class="status" id="status"></div>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap grid">
+      <div>
+        <h2>The price is counted in bits</h2>
+        <p class="lead">The graph is useful only because every edge has a real price. ZX2 scores the same bytes the stream will later write: token bits, offset bits, literal payload bytes, and extension bytes.</p>
+        <p>For a literal edge, the usual cost is one payload byte. But literal runs have length fields, and at exact thresholds one more literal also buys another extension byte. That is why the frontier carries <code>litExtLeft</code>, a tiny countdown to the next literal-length toll.</p>
+        <p>For a match edge, the price is front-loaded: one token plus the raw offset bits, with extra length bytes only for long matches. In the source this is <code>matchLenCost8</code>; despite the suffix, the values are ordinary bit counts.</p>
+      </div>
+      <div>
+        <figure class="figure">
+          <svg viewBox="0 0 760 470" role="img" aria-label="frontier state transition equation">
+            <rect width="760" height="470" fill="#ffffff"/>
+            <text x="48" y="56" fill="#13201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="850">One state, two forward edges</text>
+            <text x="48" y="86" fill="#5f6f69" font-family="ui-sans-serif, system-ui" font-size="16">At byte rel, the parser spends the current cost into future byte positions.</text>
+            <g transform="translate(72 164)" font-family="ui-sans-serif, system-ui">
+              <rect x="0" y="0" width="170" height="94" rx="8" fill="#13201c"/>
+              <text x="22" y="36" fill="#ffffff" font-size="18" font-weight="850">state rel</text>
+              <text x="22" y="65" fill="#b9cac2" font-size="15" font-family="ui-monospace, Menlo, monospace">cost, litExtLeft</text>
+              <path d="M190 28 H354" stroke="#aa7600" stroke-width="7" stroke-linecap="round"/>
+              <path d="M340 15 L358 28 L340 41" fill="none" stroke="#aa7600" stroke-width="7" stroke-linecap="round"/>
+              <rect x="388" y="-18" width="230" height="92" rx="8" fill="#f2f7ef" stroke="#aa7600"/>
+              <text x="410" y="16" fill="#7a5600" font-size="16" font-weight="850">literal edge</text>
+              <text x="410" y="44" fill="#13201c" font-size="15" font-family="ui-monospace, Menlo, monospace">rel + 1</text>
+              <text x="410" y="66" fill="#5f6f69" font-size="14">8 bits, sometimes 16</text>
+              <path d="M190 78 C282 190 422 190 520 90" stroke="#087d78" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <path d="M502 92 L524 88 L515 110" fill="none" stroke="#087d78" stroke-width="7" stroke-linecap="round"/>
+              <rect x="388" y="140" width="230" height="102" rx="8" fill="#e4f2ef" stroke="#087d78"/>
+              <text x="410" y="176" fill="#087d78" font-size="16" font-weight="850">match edge</text>
+              <text x="410" y="204" fill="#13201c" font-size="15" font-family="ui-monospace, Menlo, monospace">rel + match.len</text>
+              <text x="410" y="228" fill="#5f6f69" font-size="14">token + offset + extensions</text>
+            </g>
+            <g transform="translate(74 376)" font-family="ui-monospace, Menlo, monospace" font-size="14">
+              <rect x="0" y="0" width="612" height="54" rx="8" fill="#eef5f2" stroke="#c9d7d1"/>
+              <text x="20" y="34" fill="#13201c">relax(dst, newCost): if newCost &lt; cost[dst], replace cost and parent</text>
+            </g>
+          </svg>
+          <figcaption class="caption">Frontier mode is exact for the candidate graph it builds. The approximation is in which states and match candidates it chooses to keep.</figcaption>
+        </figure>
+        <p>The accounting stays integer and mechanical: no floats, no entropy model, no statistical guess. The parser is only asking which tokenization is cheaper under ZX2's own format.</p>
+        <div class="score">
+          <div><b>short repeat</b><span>bad</span></div>
+          <div><b>medium repeat</b><span>maybe</span></div>
+          <div><b>long repeat</b><span>good</span></div>
+          <div><b>very long</b><span>great</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap grid">
+      <div>
+        <h2>A small scoring example</h2>
+        <p>Suppose the offset takes 22 bits. A match also needs a token byte, so a short match starts with about 30 bits of overhead before length extensions. Replacing four literal bytes saves only 32 payload bits. That is barely worth anything, and after parser penalties it may be rejected.</p>
+        <p>Replacing twenty bytes is different. The literal version costs around 160 payload bits, while the match still pays the same offset and token overhead. The longer the copied phrase, the more the fixed overhead disappears into the noise.</p>
+        <p>This is the quiet reason the frontier parser does not simply prefer the longest match. It prefers the path whose total encoding price is smallest.</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 760 410" role="img" aria-label="match cost amortization">
+          <rect width="760" height="410" fill="#fffdfa"/>
+          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">Match overhead gets cheaper per byte</text>
+          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">A fixed token plus offset is painful for tiny matches and excellent for long ones.</text>
+          <g transform="translate(78 315)" font-family="ui-sans-serif, system-ui" text-anchor="middle">
+            <line x1="0" y1="0" x2="610" y2="0" stroke="#17201c" stroke-width="3"/>
+            <line x1="0" y1="0" x2="0" y2="-210" stroke="#17201c" stroke-width="3"/>
+            <g fill="#65716d" font-size="13">
+              <text x="0" y="26">4</text><text x="170" y="26">12</text><text x="340" y="26">20</text><text x="510" y="26">28</text>
+              <text x="-34" y="-170">cost</text>
+            </g>
+            <path d="M0 -32 L170 -96 L340 -160 L510 -224" stroke="#aa7600" stroke-width="7" fill="none" stroke-linecap="round"/>
+            <path d="M0 -30 L170 -42 L340 -44 L510 -46" stroke="#087d78" stroke-width="7" fill="none" stroke-linecap="round"/>
+            <circle cx="0" cy="-32" r="8" fill="#aa7600"/><circle cx="170" cy="-96" r="8" fill="#aa7600"/><circle cx="340" cy="-160" r="8" fill="#aa7600"/>
+            <circle cx="0" cy="-30" r="8" fill="#087d78"/><circle cx="170" cy="-42" r="8" fill="#087d78"/><circle cx="340" cy="-44" r="8" fill="#087d78"/>
+          </g>
+          <g transform="translate(500 128)" font-family="ui-sans-serif, system-ui" font-size="15" font-weight="800">
+            <rect x="0" y="0" width="170" height="68" rx="8" fill="#fffdfa" stroke="#d8d2c5"/>
+            <path d="M18 24 H48" stroke="#aa7600" stroke-width="6" stroke-linecap="round"/><text x="60" y="29" fill="#17201c">literals</text>
+            <path d="M18 48 H48" stroke="#087d78" stroke-width="6" stroke-linecap="round"/><text x="60" y="53" fill="#17201c">match</text>
+          </g>
+        </svg>
+        <figcaption class="caption">The exact constants differ with compile-time offset width and length-extension thresholds, but the shape is the important part.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>The whole algorithm in five moves</h2>
+      <div class="timeline">
+        <div class="step">
+          <div class="num">1</div>
+          <p><strong>Cut the input into segments.</strong> The current code uses <code>ZX2_FRONTIER_SEGMENT</code>, default 32768 bytes. Each segment is one bounded shortest-path problem.</p>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <p><strong>Seed the first cost.</strong> At the start of a segment, <code>cost[0] = 0</code>. The pending literal-run state is imported with <code>litExtLeft[0]</code>, because a literal run can continue across segment boundaries.</p>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <p><strong>Advance by one literal.</strong> From each reachable position, it offers a one-byte literal edge. Most literals cost 8 bits of payload; sometimes they also trigger a literal-length extension byte.</p>
+        </div>
+        <div class="step">
+          <div class="num">4</div>
+          <p><strong>Walk the per-hash binary tree.</strong> <code>findBestAndInsertBT</code> inserts the current byte position into a tree of older strings with the same 4-byte hash, then returns the best useful repeat found during that insertion walk.</p>
+        </div>
+        <div class="step">
+          <div class="num">5</div>
+          <p><strong>Trace back and emit.</strong> Once <code>cost[segN]</code> is finite, ZX2 follows <code>parent[]</code> backward, reverses the route, and feeds those literal runs and matches into <code>BlockBuilder</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap grid">
+      <div>
+        <h2>The code, translated</h2>
+        <p>The actual loop in <code>ZX2Compressor::compress</code> is compact because the graph is acyclic. It does dynamic programming, literal-run phase tracking, BT match generation, and traceback in one forward sweep plus one backward pass.</p>
+        <pre class="codebox">for each segment:
+    cost[0] = 0
+
+    for each reachable position rel:
+        relax literal edge rel -> rel + 1
+
+        match = findBestAndInsertBT(position)
+        if match exists:
+            relax match edge rel -> rel + match.len
+
+    require cost[segN] to be finite
+    follow parent[] backward from segment end
+    replay the recovered path into BlockBuilder</pre>
+        <p>The word "relax" is the standard shortest-path operation: if a newly discovered route to a future position is cheaper than the old route, replace the old route and remember where it came from.</p>
+      </div>
+      <div>
+        <h3>Why the graph has no cycles</h3>
+        <p>Every edge moves forward. A literal moves from <code>rel</code> to <code>rel + 1</code>. A match moves from <code>rel</code> to <code>rel + len</code>. There is no backward edge, so the parser does not need Dijkstra, a heap, or repeated passes.</p>
+        <h3>Why parent pointers are enough</h3>
+        <p>Once <code>cost[segN]</code> is final, the cheapest path is encoded in reverse by <code>parent[]</code>. A missing parent marks a literal stretch; a real predecessor marks a match jump with <code>parentLen</code> and <code>parentOff</code>.</p>
+        <h3>Why replay instead of emitting immediately</h3>
+        <p>Immediate emission would make the parser greedy again. Frontier mode first decides the whole segment path, then emits. That separation is the entire trick.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap grid">
+      <div>
+        <h2>The binary tree under the frontier</h2>
+        <p class="lead">The frontier table decides which path is cheapest. The binary tree supplies the jump edges cheaply enough to make that decision practical.</p>
+        <p>For each 4-byte hash, ZX2 keeps a tree of previous positions whose next bytes begin the same way. Each node is an old source position. One child points toward lexicographically smaller suffixes; the other points toward larger suffixes.</p>
+        <p>At a new position, the compressor descends that tree. Each visited old position is both a possible match and a routing comparison for insertion. The walk measures the common prefix, scores the match if it can save bits, then splices the current position into the same tree.</p>
+        <p>The clever detail is the LCP bookkeeping: the walk carries lower bounds from the small and large sides, so repeated byte comparisons are skipped. This keeps the search closer to "compare what is still unknown" than "restart the string compare at byte zero".</p>
+        <div class="mini">
+          <div><b><code>hashes[h]</code></b><span>The root old position for this 4-byte hash bucket.</span></div>
+          <div><b><code>btLinks[pos]</code></b><span>The two child links for one old source position, stored in a window-sized ring.</span></div>
+          <div><b><code>small</code> / <code>large</code></b><span>The binary-search-tree split over suffix order, stored as compact child deltas.</span></div>
+          <div><b>LCP bounds</b><span>The known common-prefix lengths from both sides. They are a search-time cache, not stream data.</span></div>
+        </div>
+        <pre class="codebox">node = hashes[hash(current)]
+hashes[hash(current)] = current
+
+while node is inside the window:
+    len = common prefix(current, node)
+    maybe keep node as the best match
+
+    if old_suffix_after_len < current_suffix_after_len:
+        follow / rewrite the small-side link
+    else:
+        follow / rewrite the large-side link</pre>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 760 470" role="img" aria-label="binary tree match search">
+          <rect width="760" height="470" fill="#fffdfa"/>
+          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">One tree walk: search plus insert</text>
+          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The current string descends through older strings in the same hash bucket.</text>
+          <g transform="translate(382 210)" font-family="ui-sans-serif, system-ui" text-anchor="middle">
+            <g stroke="#d8d2c5" stroke-width="4" fill="none">
+              <path d="M0 0 L-180 110"/><path d="M0 0 L180 110"/>
+              <path d="M-180 110 L-260 220"/><path d="M-180 110 L-95 220"/>
+              <path d="M180 110 L100 220"/><path d="M180 110 L265 220"/>
+            </g>
+            <g>
+              <circle cx="0" cy="0" r="36" fill="#17201c"/><text x="0" y="7" fill="white" font-size="16" font-weight="800">cur</text>
+              <circle cx="-180" cy="110" r="32" fill="#e4f2ef" stroke="#087d78" stroke-width="3"/><text x="-180" y="116" fill="#087d78" font-size="15" font-weight="800">old</text>
+              <circle cx="180" cy="110" r="32" fill="#fff1ee" stroke="#b43d45" stroke-width="3"/><text x="180" y="116" fill="#b43d45" font-size="15" font-weight="800">old</text>
+              <circle cx="-260" cy="220" r="26" fill="#f7f5ef" stroke="#aa7600" stroke-width="3"/><text x="-260" y="225" fill="#7a5600" font-size="13" font-weight="800">old</text>
+              <circle cx="-95" cy="220" r="26" fill="#f7f5ef" stroke="#aa7600" stroke-width="3"/><text x="-95" y="225" fill="#7a5600" font-size="13" font-weight="800">old</text>
+              <circle cx="100" cy="220" r="26" fill="#f7f5ef" stroke="#3768a6" stroke-width="3"/><text x="100" y="225" fill="#3768a6" font-size="13" font-weight="800">old</text>
+              <circle cx="265" cy="220" r="26" fill="#f7f5ef" stroke="#3768a6" stroke-width="3"/><text x="265" y="225" fill="#3768a6" font-size="13" font-weight="800">old</text>
+            </g>
+            <text x="-255" y="92" fill="#087d78" font-size="14" font-weight="850">smaller suffixes</text>
+            <text x="258" y="92" fill="#b43d45" font-size="14" font-weight="850">larger suffixes</text>
+            <text x="0" y="-54" fill="#65716d" font-size="13" font-weight="800">root = hashes[h]</text>
+            <path class="draw" d="M0 0 L-180 110 L-95 220" stroke="#087d78" stroke-width="7" fill="none" stroke-linecap="round"/>
+          </g>
+        </svg>
+        <figcaption class="caption">This tree is temporary encoder state. It is not stored in the compressed output; it only helps the frontier parser discover match edges cheaply enough.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap grid">
+      <div>
+        <h2>Segments are a speed bargain</h2>
+        <p class="lead">A whole-block optimal parser would let an early decision compete with every later consequence. ZX2 deliberately refuses that bill.</p>
+        <p>Inside a segment, it finds the best path under its candidate model. At the boundary, it commits. That is why the arrays are sized by <code>ZX2_FRONTIER_SEGMENT + 1</code> instead of by the whole block: memory stays bounded, cache behavior stays sane, and the parser has a fixed horizon.</p>
+        <p>One continuity rule is worth keeping: pending literals can cross a segment boundary. If one segment ends with raw bytes and the next begins with raw bytes, ZX2 can keep them as one literal run, preserving the literal-extension accounting.</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 760 390" role="img" aria-label="segments with carried literal state">
+          <rect width="760" height="390" fill="#fffdfa"/>
+          <text x="54" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">Commit by segment, carry literal state</text>
+          <text x="54" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The path is solved locally, but literal runs are allowed to continue.</text>
+          <g transform="translate(70 170)" font-family="ui-sans-serif, system-ui" font-weight="850" text-anchor="middle">
+            <rect x="0" y="0" width="190" height="96" rx="8" fill="#f7f5ef" stroke="#d8d2c5"/>
+            <rect x="210" y="0" width="190" height="96" rx="8" fill="#f7f5ef" stroke="#d8d2c5"/>
+            <rect x="420" y="0" width="190" height="96" rx="8" fill="#f7f5ef" stroke="#d8d2c5"/>
+            <text x="95" y="38" fill="#17201c">segment 1</text>
+            <text x="305" y="38" fill="#17201c">segment 2</text>
+            <text x="515" y="38" fill="#17201c">segment 3</text>
+            <path d="M145 69 H260 H375" stroke="#aa7600" stroke-width="8" stroke-linecap="round"/>
+            <path d="M50 69 C85 20 125 20 160 69" fill="none" stroke="#087d78" stroke-width="7" stroke-linecap="round"/>
+            <path d="M430 69 C470 12 545 12 585 69" fill="none" stroke="#3768a6" stroke-width="7" stroke-linecap="round"/>
+            <line x1="200" y1="-28" x2="200" y2="124" stroke="#b43d45" stroke-width="3" stroke-dasharray="8 8"/>
+            <line x1="410" y1="-28" x2="410" y2="124" stroke="#b43d45" stroke-width="3" stroke-dasharray="8 8"/>
+            <text x="260" y="122" fill="#aa7600" font-size="14">literal run can continue</text>
+          </g>
+        </svg>
+        <figcaption class="caption">The segment boundary limits parser lookahead, not the encoded block format.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap grid">
+      <div>
+        <h2>Why this is not full optimal parsing</h2>
+        <p>The word "frontier" can sound grander than the code. ZX2 frontier mode is intentionally narrow.</p>
+        <p>It keeps one winning state per byte position: one cost, one literal-extension countdown, one parent. It also takes one best scored match from the BT at each start position. It does not preserve a portfolio of near-tie literal phases, multiple lengths for the same offset, or several offsets whose prices are close.</p>
+        <p>That is the right compromise for this compressor: much less myopic than greedy lazy parsing, but still small enough to reason about and cheap enough to run as an encoder mode.</p>
+      </div>
+      <div class="split">
+        <div class="note">
+          <strong>Greedy</strong>
+          <p>Take the best local match, maybe with one lazy lookahead. Fast, but easily fooled.</p>
+        </div>
+        <div class="note" style="border-left-color: var(--red)">
+          <strong>Frontier</strong>
+          <p>Keep the cheapest surviving state at each byte. Better local-global tradeoff, still compact.</p>
+        </div>
+        <div class="note" style="border-left-color: var(--blue)">
+          <strong>Optimal</strong>
+          <p>Keep many competing states and candidates. Stronger ratio, much more parser work.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>The knobs and what they really control</h2>
+      <p class="wide">ZX2 has two kinds of parameters. Some change the stream format or decoder assumptions; those are architectural. Others only change how hard the encoder searches before it writes the same kind of stream. Mixing those up makes the frontier parser harder to reason about than it is.</p>
+      <div class="knobs">
+        <div class="knob">
+          <h3><code>algorithm</code><span class="tag">parser</span></h3>
+          <p>Selects the parsing strategy. <code>Lazy</code> is the faster local parser. <code>Frontier</code> spends more encoder work to solve a segmented path problem. This changes which tokens are emitted, but the decoder still reads the same ZX2 stream family.</p>
+          <div class="direction"><span>fast local choices</span><i></i><span>slower segment planning</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_TOKEN_LIT_BITS</code> / <code>ZX2_TOKEN_MATCH_BITS</code><span class="tag format">format</span></h3>
+          <p>Controls how one token byte is split between literal-run length and match length. The current 3/5 split gives small literal lengths in the token and more match-length room before extensions. Changing this reshapes both the stream and the parser cost table.</p>
+          <div class="direction"><span>more literal token room</span><i></i><span>more match token room</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_MATCH_OFFSET_BITS_VALUE</code><span class="tag format">format</span></h3>
+          <p>Controls how many bits are available for match offsets: 16, 18, 20, or 22 in this source. More bits let a match refer farther back, improving ratio on long-range repetition. They also make every match offset more expensive and change the encoded stream layout.</p>
+          <div class="direction"><span>smaller, faster offsets</span><i></i><span>larger history reach</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>windowKB</code><span class="tag">search</span></h3>
+          <p>Caps how much previous input the compressor is allowed to search. It is clipped by the encoded offset range, so a huge window cannot exceed what the offset bits can represent. Larger windows may find older matches, but they increase parser memory and search pressure.</p>
+          <div class="direction"><span>less memory</span><i></i><span>more long-range matches</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>hashBits</code><span class="tag speed">match finder</span></h3>
+          <p>Sets the number of hash buckets for the 4-byte match key. More buckets usually mean shorter collision chains and cleaner candidates, at the cost of a larger hash table. Too few buckets make unrelated positions compete in the same bucket.</p>
+          <div class="direction"><span>smaller table</span><i></i><span>cleaner buckets</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>maxChain</code><span class="tag speed">match finder</span></h3>
+          <p>Limits how many old candidates the matcher examines at one position. This is the main compression-speed dial: higher values search harder and can improve ratio, but every extra probe happens inside a very hot encoder loop.</p>
+          <div class="direction"><span>faster encode</span><i></i><span>better candidate search</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>chainBits</code><span class="tag speed">storage</span></h3>
+          <p>Controls the ring size used for match links. Frontier mode's binary tree requires it to match the window bits, because tree child references are stored as deltas inside that window-sized ring. Lazy mode can use row storage instead.</p>
+          <div class="direction"><span>smaller link ring</span><i></i><span>full-window BT links</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_FRONTIER_SEGMENT_VALUE</code><span class="tag">frontier</span></h3>
+          <p>Sets the byte length of one dynamic-programming problem. Larger segments give the parser a longer horizon and larger arrays; smaller segments commit sooner and spend less state. It changes encoder decisions, not the decoder format.</p>
+          <div class="direction"><span>less parser state</span><i></i><span>longer planning horizon</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_FRONTIER_GOOD_ENOUGH_LENGTH_VALUE</code><span class="tag speed">frontier</span></h3>
+          <p>Allows frontier's BT search to stop scoring once it has found a match of a chosen length. Zero means disabled. It is a speed shortcut: useful only if the early stop does not discard matches that would alter the segment path.</p>
+          <div class="direction"><span>exhaustive scoring</span><i></i><span>earlier stop</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_FRONTIER_SKIP_PERIOD_VALUE</code><span class="tag speed">frontier</span></h3>
+          <p>Skips insertion on a regular cadence while still walking the existing BT for scoring. It reduces tree churn and memory traffic, but it also removes some future source positions from consideration.</p>
+          <div class="direction"><span>denser BT history</span><i></i><span>less insertion work</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_MIN_MATCH_LENGTH_VALUE</code><span class="tag format">format</span></h3>
+          <p>Defines the shortest legal match length. The current default is 4. Raising it removes short-match choices and simplifies some decisions, but it can lose real compression opportunities. It also changes the meaning of match length codes.</p>
+          <div class="direction"><span>more short matches</span><i></i><span>fewer candidates</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_MIN_OFFSET</code><span class="tag format">decoder</span></h3>
+          <p>Sets the closest allowed backward copy. The current value, 32, is deliberate: it makes short decoded match copies non-overlapping, which lets the decoder use simple 32-byte vector copies. Lower offsets might find a few extra matches but complicate fast copy behavior.</p>
+          <div class="direction"><span>more nearby matches</span><i></i><span>simpler fast copies</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_MIN_MATCH_GAIN8_VALUE</code><span class="tag">parser bias</span></h3>
+          <p>Requires a match to beat literals by extra cost before it is accepted by the lazy scorer. It is a conservative bias against marginal matches. Frontier mostly uses the direct parser save table, but the idea is the same: tiny wins are not always worth extra match ops.</p>
+          <div class="direction"><span>accept marginal wins</span><i></i><span>demand clearer wins</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_ZERO_LIT_MATCH_PENALTY8_VALUE</code><span class="tag">parser bias</span></h3>
+          <p>Adds a parser-only penalty when a match follows a previous match with no literal bytes between them. This discourages dense chains of tiny matches, often helping decode speed by reducing match op count while spending a little ratio.</p>
+          <div class="direction"><span>more match chaining</span><i></i><span>fewer zero-lit matches</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>ZX2_MATCH_INSERT_LIMIT_VALUE</code><span class="tag speed">parser policy</span></h3>
+          <p>Caps how many interior positions of an emitted match are inserted into match search. Zero means no artificial cap in this source. A cap can speed future searches and avoid noisy candidates, but it is a parser policy rather than a format rule.</p>
+          <div class="direction"><span>full insertion</span><i></i><span>less interior work</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>blockBytes</code><span class="tag">block shape</span></h3>
+          <p>Controls how much input goes into one ZX2 block. Blocks reset some output organization and bound memory use. A small block limits long-range opportunities across block boundaries; a huge block lets the parser and output streams work over more data at once.</p>
+          <div class="direction"><span>smaller blocks</span><i></i><span>more continuity</span></div>
+        </div>
+        <div class="knob">
+          <h3><code>huffman</code><span class="tag format">second pass</span></h3>
+          <p>Optionally Huffman-compresses the split streams after the LZ parse. It changes the block payload representation but not the frontier decision process itself. Useful when the extra encode/decode stage wins enough bytes to justify the work.</p>
+          <div class="direction"><span>raw split streams</span><i></i><span>extra entropy pass</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>What the frontier buys, and what it spends</h2>
+      <p class="wide">Frontier is best understood as a ratio mode, not a decoder idea. It spends compression CPU and encoder memory to choose better tokens, while leaving decompression on the same simple ZX2 stream.</p>
+      <div class="tablewrap">
+        <table class="compare" aria-label="parser tradeoff table">
+          <thead>
+            <tr><th>Parser</th><th>Question it asks</th><th>Strength</th><th>Cost</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Greedy / lazy</strong></td>
+              <td>Is there a good match here, or maybe one byte later?</td>
+              <td>Fast compression, simple state, good default behavior.</td>
+              <td>Can miss choices whose benefit appears several bytes later.</td>
+            </tr>
+            <tr>
+              <td><strong>Frontier</strong></td>
+              <td>What is the cheapest path through this segment?</td>
+              <td>Finds non-local wins inside the segment using actual ZX2 token costs.</td>
+              <td>Visits every byte, walks the BT, and stores traceback state.</td>
+            </tr>
+            <tr>
+              <td><strong>Rich optimal</strong></td>
+              <td>Which of many competing states will age best?</td>
+              <td>Potentially better ratio, especially with many near-tie candidates.</td>
+              <td>More memory, more branches, more candidate generation, harder tuning.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="two">
+        <div class="note">
+          <strong>Decoder stays clean</strong>
+          <p>The compressed bytes are still ordinary ZX2 tokens. Frontier changes how the encoder chooses them, not how the decoder reads them.</p>
+        </div>
+        <div class="note" style="border-left-color: var(--red)">
+          <strong>Compressor pays</strong>
+          <p>Every source byte becomes a parser state. Every state walks the binary-tree matcher. That is the expensive part.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap grid">
+      <div>
+        <h2>Where to look in the source</h2>
+        <p>The core is short enough to read directly once the mental model is in place.</p>
+        <div class="mini">
+          <div><b>Constants</b><span><code>ZX2_FRONTIER_SEGMENT</code>, token bit split, offset width, and literal/match cost functions live near the top of <code>Core/misc/ZX2.hpp</code>.</span></div>
+          <div><b>BT node links</b><span><code>BTLink</code> and <code>BTChildRef</code> define the compact small/large child links used by the binary tree.</span></div>
+          <div><b>Match scoring</b><span><code>parserMatchSave8</code> precomputes how many bits a match can save over writing the same span as literals.</span></div>
+          <div><b>BT search</b><span><code>findBestAndInsertBT</code> fuses insertion and match lookup for frontier mode.</span></div>
+          <div><b>Parser loop</b><span>The <code>ZX2Algorithm::Frontier</code> branch in <code>ZX2Compressor::compress</code> fills <code>cost[]</code>, records parents, traces back, and replays.</span></div>
+        </div>
+      </div>
+      <div>
+        <h3>The most important tiny detail</h3>
+        <p>The parser does not emit while it is deciding. It records possible futures first. That separation is what turns a pile of match searches into a path problem.</p>
+        <h3>The second most important detail</h3>
+        <p>The cost model is tied to the actual stream format. Change token layout, offset width, or extension thresholds, and the parser's idea of a good path changes with them.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap grid">
+      <div>
+        <h2>The useful mental model</h2>
+        <p class="lead">ZX2 frontier mode is a small pathfinder living inside the compressor.</p>
+        <p>It walks a fixed-size segment. At every byte it asks: buy one more literal, or jump with the best match the BT can justify? It records the cheapest known way to stand at future byte boundaries. At the end, traceback turns those remembered choices into ordinary ZX2 tokens.</p>
+        <p>The decoder never sees any of this. The output is still literal lengths, match lengths, offsets, and extension bytes. Frontier is an encoder-only luxury: pay compression time now, usually get fewer bytes later.</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 760 360" role="img" aria-label="traceback path">
+          <rect width="760" height="360" fill="#fffdfa"/>
+          <g transform="translate(72 215)">
+            <line x1="0" y1="0" x2="616" y2="0" stroke="#17201c" stroke-width="4" stroke-linecap="round"/>
+            <g fill="#17201c">
+              <circle cx="0" cy="0" r="8"/><circle cx="88" cy="0" r="8"/><circle cx="176" cy="0" r="8"/><circle cx="264" cy="0" r="8"/>
+              <circle cx="352" cy="0" r="8"/><circle cx="440" cy="0" r="8"/><circle cx="528" cy="0" r="8"/><circle cx="616" cy="0" r="8"/>
+            </g>
+            <path d="M0 -18 H88" stroke="#aa7600" stroke-width="8" stroke-linecap="round"/>
+            <path d="M88 0 C190 -130 338 -130 440 0" fill="none" stroke="#087d78" stroke-width="8" stroke-linecap="round"/>
+            <path d="M440 -18 H528" stroke="#aa7600" stroke-width="8" stroke-linecap="round"/>
+            <path d="M528 0 C560 -70 584 -70 616 0" fill="none" stroke="#3768a6" stroke-width="8" stroke-linecap="round"/>
+          </g>
+          <text x="72" y="60" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">Traceback turns costs into tokens</text>
+          <text x="72" y="92" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">The best path is replayed through BlockBuilder, so the file format stays unchanged.</text>
+        </svg>
+        <div class="legend">
+          <span class="key"><i class="swatch gold"></i>literal run</span>
+          <span class="key"><i class="swatch"></i>long match</span>
+          <span class="key"><i class="swatch blue"></i>short match</span>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+<script>
+(() => {
+  const letters = "abracadabra_abraca".split("");
+  const bytes = document.getElementById("bytes");
+  const grid = document.getElementById("costgrid");
+  const status = document.getElementById("status");
+  const statuses = [
+    "Start: position 0 is free. Everything else is unknown.",
+    "Literal edges advance one byte. They are boring, but they always work.",
+    "A match edge jumps over several bytes when it is cheaper than spelling them.",
+    "The table keeps only the cheapest known way to stand at each position.",
+    "At the end, parent pointers reconstruct the path and BlockBuilder emits it."
+  ];
+
+  letters.forEach((x, i) => {
+    const b = document.createElement("div");
+    b.className = "byte";
+    b.textContent = x === "_" ? " " : x;
+    b.dataset.i = i;
+    bytes.appendChild(b);
+  });
+
+  for (let i = 0; i < 20; ++i) {
+    const c = document.createElement("div");
+    c.className = "cell";
+    c.innerHTML = `<small>${i}</small><span>${i ? "inf" : "0"}</span>`;
+    grid.appendChild(c);
+  }
+
+  let tick = 0;
+  const paint = () => {
+    const pos = tick % 10;
+    [...bytes.children].forEach((b, i) => {
+      b.className = "byte";
+      if (i === pos) b.classList.add("now");
+      if ((pos === 2 && i >= 7 && i <= 10) || (pos === 5 && i >= 11 && i <= 15)) b.classList.add("match");
+    });
+    [...grid.children].forEach((c, i) => {
+      c.className = "cell";
+      const span = c.querySelector("span");
+      if (i <= pos + 1) { c.classList.add("done"); span.textContent = String(i * 8); }
+      else span.textContent = "inf";
+      if (i === pos + 1) c.classList.add("live");
+      if (pos >= 2 && i === 7) { c.classList.add("live"); span.textContent = "34"; }
+      if (pos >= 5 && i === 11) { c.classList.add("live"); span.textContent = "52"; }
+    });
+    status.textContent = statuses[tick % statuses.length];
+    tick += 1;
+  };
+  paint();
+  window.setInterval(paint, 1800);
+})();
+</script>
+</body>
+</html>
