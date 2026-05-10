@@ -409,6 +409,22 @@
     color: var(--muted);
     font: 14px/1.38 ui-sans-serif, system-ui, sans-serif;
   }
+  .route-data {
+    width: calc(100% - 32px);
+    margin: 0 16px 16px;
+    border-collapse: collapse;
+    font: 13px/1.3 ui-sans-serif, system-ui, sans-serif;
+  }
+  .route-data th, .route-data td {
+    padding: 9px 10px;
+    border-top: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+  .route-data th { color: var(--muted); font-weight: 850; }
+  .route-data td:last-child, .route-data th:last-child { text-align: right; }
+  .route-data tr.active { background: #f0fbf8; }
+  .route-data code { white-space: nowrap; }
   .routepath { transition: opacity .22s, stroke-width .22s; }
   .routepath.dim { opacity: .18; }
   .routepath.hotline { stroke-width: 10; }
@@ -530,14 +546,27 @@
             <circle class="march" cx="0" cy="-16" r="10" fill="#3768a6"/>
           </g>
           <text x="72" y="58" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="800">A segment becomes a map</text>
-          <text x="72" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">Flat roads are literals. Arcs are match shortcuts. The parser chooses a route.</text>
+          <text x="72" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">Toy costs: literal = 8 bits, match shortcut = 30 bits.</text>
+          <g font-family="ui-sans-serif, system-ui" font-size="14" font-weight="850">
+            <rect x="482" y="118" width="190" height="92" rx="8" fill="#ffffff" stroke="#c9d7d1"/>
+            <text x="500" y="148" fill="#087d78">greedy: L + M3 + 3L = 62</text>
+            <text x="500" y="178" fill="#b43d45">frontier: 2L + M4 + L = 54</text>
+            <text x="500" y="198" fill="#65716d" font-size="12">lower total wins</text>
+          </g>
         </svg>
-        <figcaption class="caption">Toggle the route: the tempting shortcut wins locally; the frontier route can win once the whole segment is priced.</figcaption>
+        <figcaption class="caption">Toggle the route. With this toy cost model, the tempting local match is 8 bits worse once the whole segment is priced.</figcaption>
         <div class="choicebar" aria-label="route comparison controls">
           <button class="active" type="button" data-route="greedy">Greedy-looking shortcut</button>
           <button type="button" data-route="frontier">Frontier route</button>
         </div>
-        <div class="route-note" id="routeNote">The local parser grabs the early match. It looks tidy, but it may spend the start of a better later match.</div>
+        <div class="route-note" id="routeNote">Greedy takes the first shortcut: one literal, a 3-byte match, then three literals. Total: 8 + 30 + 24 = 62 bits.</div>
+        <table class="route-data" aria-label="toy route cost comparison">
+          <thead><tr><th>Route</th><th>Moves</th><th>Total</th></tr></thead>
+          <tbody>
+            <tr class="active" data-route-row="greedy"><td>Greedy</td><td><code>L0</code>, <code>M1->4</code>, <code>L4</code>, <code>L5</code>, <code>L6</code></td><td>62 bits</td></tr>
+            <tr data-route-row="frontier"><td>Frontier</td><td><code>L0</code>, <code>L1</code>, <code>M2->6</code>, <code>L6</code></td><td>54 bits</td></tr>
+          </tbody>
+        </table>
       </figure>
     </div>
   </section>
@@ -1029,6 +1058,7 @@ while node is inside the window:
   const routeNote = document.getElementById("routeNote");
   const greedyRoute = document.getElementById("greedyRoute");
   const frontierRoute = document.getElementById("frontierRoute");
+  const routeRows = document.querySelectorAll("[data-route-row]");
   const statuses = [
     "Start: position 0 costs nothing. The rest of the ledger is blank.",
     "Literal edges advance one byte. Plain, dependable, not always cheap.",
@@ -1037,8 +1067,8 @@ while node is inside the window:
     "At the end, parent pointers walk the route backward and BlockBuilder emits it."
   ];
   const routeCopy = {
-    greedy: "The local parser grabs the early match. It looks tidy, but it may spend the start of a better later match.",
-    frontier: "Frontier prices the whole segment before committing, so the later larger jump can beat the tempting local shortcut."
+    greedy: "Greedy takes the first shortcut: one literal, a 3-byte match, then three literals. Total: 8 + 30 + 24 = 62 bits.",
+    frontier: "Frontier waits one more byte, buys the 4-byte shortcut, then emits one final literal. Total: 16 + 30 + 8 = 54 bits."
   };
 
   document.querySelectorAll("[data-route]").forEach(button => {
@@ -1049,6 +1079,7 @@ while node is inside the window:
       greedyRoute.classList.toggle("hotline", !frontier);
       frontierRoute.classList.toggle("dim", !frontier);
       frontierRoute.classList.toggle("hotline", frontier);
+      routeRows.forEach(row => row.classList.toggle("active", row.dataset.routeRow === button.dataset.route));
       routeNote.textContent = routeCopy[button.dataset.route];
     });
   });
