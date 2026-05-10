@@ -323,6 +323,13 @@
     color: #303a36;
     font: 700 15px/1.35 ui-sans-serif, system-ui, sans-serif;
   }
+  .sim-note {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font: 13px/1.35 ui-sans-serif, system-ui, sans-serif;
+  }
   .timeline {
     display: grid;
     grid-template-columns: 1fr;
@@ -592,6 +599,7 @@ parentOff      match offset, or zero for literals</pre>
         <div class="bytes" id="bytes"></div>
         <div class="costgrid" id="costgrid"></div>
         <div class="status" id="status"></div>
+        <div class="sim-note">Toy-but-ZX2-shaped costs: literal = 8 bits; short match = 30 bits (token byte + 22-bit offset), ignoring extension thresholds.</div>
       </figure>
     </div>
   </section>
@@ -1052,6 +1060,11 @@ while node is inside the window:
 <script>
 (() => {
   const letters = "abracadabra_abraca".split("");
+  const literalCost = 8, matchCost = 30;
+  const simMatches = [
+    { from: 2, to: 7, lo: 7, hi: 10 },
+    { from: 5, to: 11, lo: 11, hi: 15 }
+  ];
   const bytes = document.getElementById("bytes");
   const grid = document.getElementById("costgrid");
   const status = document.getElementById("status");
@@ -1060,11 +1073,11 @@ while node is inside the window:
   const frontierRoute = document.getElementById("frontierRoute");
   const routeRows = document.querySelectorAll("[data-route-row]");
   const statuses = [
-    "Start: position 0 costs nothing. Every later position is still unknown.",
-    "Literal edges advance one byte. Plain, dependable, not always cheap.",
-    "A match edge jumps over bytes when it beats spelling them out.",
-    "The table keeps only the cheapest known way to stand at each position.",
-    "At the end, parent pointers walk the route backward and BlockBuilder emits it."
+    "Start: cost[0] = 0. Every later boundary is still unknown.",
+    "Literal relaxation adds 8 bits: cost[i + 1] = min(cost[i + 1], cost[i] + 8).",
+    "At position 2, the match edge writes cost[7] = cost[2] + 30 = 46 bits.",
+    "At position 5, the next match edge writes cost[11] = cost[5] + 30 = 70 bits.",
+    "Each number shown is a cumulative best known cost in bits under this toy model."
   ];
   const routeCopy = {
     greedy: "Greedy takes the first shortcut: one literal, a 3-byte match, then three literals. Total: 8 + 30 + 24 = 62 bits.",
@@ -1093,7 +1106,7 @@ while node is inside the window:
     bytes.appendChild(b);
   });
 
-  for (let i = 0; i < 20; ++i) {
+  for (let i = 0; i <= letters.length; ++i) {
     const c = document.createElement("div");
     c.className = "cell";
     c.innerHTML = `<small>${i}</small><span>${i ? "inf" : "0"}</span>`;
@@ -1102,20 +1115,29 @@ while node is inside the window:
 
   let tick = 0;
   const paint = () => {
-    const pos = tick % 10;
+    const pos = tick % 12;
+    const costs = Array(letters.length + 1).fill(Infinity);
+    costs[0] = 0;
+    for (let r = 0; r <= pos && r < letters.length; ++r) {
+      if (!Number.isFinite(costs[r])) continue;
+      costs[r + 1] = Math.min(costs[r + 1], costs[r] + literalCost);
+      simMatches.forEach(m => {
+        if (m.from === r) costs[m.to] = Math.min(costs[m.to], costs[r] + matchCost);
+      });
+    }
     [...bytes.children].forEach((b, i) => {
       b.className = "byte";
       if (i === pos) b.classList.add("now");
-      if ((pos === 2 && i >= 7 && i <= 10) || (pos === 5 && i >= 11 && i <= 15)) b.classList.add("match");
+      simMatches.forEach(m => {
+        if (pos >= m.from && i >= m.lo && i <= m.hi) b.classList.add("match");
+      });
     });
     [...grid.children].forEach((c, i) => {
       c.className = "cell";
       const span = c.querySelector("span");
-      if (i <= pos + 1) { c.classList.add("done"); span.textContent = String(i * 8); }
-      else span.textContent = "inf";
-      if (i === pos + 1) c.classList.add("live");
-      if (pos >= 2 && i === 7) { c.classList.add("live"); span.textContent = "34"; }
-      if (pos >= 5 && i === 11) { c.classList.add("live"); span.textContent = "52"; }
+      if (Number.isFinite(costs[i])) { c.classList.add(i <= pos ? "done" : "live"); span.textContent = String(costs[i]); }
+      else { span.textContent = "inf"; }
+      if (i === pos + 1 && Number.isFinite(costs[i])) c.classList.add("live");
     });
     status.textContent = statuses[tick % statuses.length];
     tick += 1;
