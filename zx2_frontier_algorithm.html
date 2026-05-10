@@ -212,6 +212,58 @@
     font: 850 24px/1 ui-sans-serif, system-ui, sans-serif;
     color: var(--ink);
   }
+  .calc {
+    padding: 16px;
+    border-top: 1px solid var(--line);
+    background: #fbfdfc;
+    font: 14px/1.35 ui-sans-serif, system-ui, sans-serif;
+  }
+  .calc-controls {
+    display: grid;
+    grid-template-columns: 1fr 150px;
+    gap: 12px;
+    align-items: end;
+  }
+  .calc label {
+    display: grid;
+    gap: 6px;
+    color: var(--muted);
+    font-weight: 800;
+  }
+  .calc input, .calc select {
+    width: 100%;
+    min-height: 34px;
+    accent-color: var(--teal);
+    font: 800 14px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .calc-output {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .calc-output div {
+    min-height: 72px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+  }
+  .calc-output b {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--muted);
+    font: 800 12px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .calc-output span {
+    color: var(--ink);
+    font: 850 22px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .calc-note {
+    margin-top: 12px;
+    color: #303a36;
+    font-weight: 750;
+  }
   .compare {
     width: 100%;
     border-collapse: collapse;
@@ -448,7 +500,7 @@
     .hero h1 { font-size: 52px; }
     .dek { font-size: 22px; }
     h2 { font-size: 32px; }
-    .grid, .split, .two, .score, .knobs, .statecards { grid-template-columns: 1fr; }
+    .grid, .split, .two, .score, .knobs, .statecards, .calc-controls, .calc-output { grid-template-columns: 1fr; }
     .mini div { grid-template-columns: 1fr; gap: 6px; }
     .rail { grid-template-columns: repeat(3, 1fr); }
     .bytes { grid-template-columns: repeat(9, 1fr); }
@@ -659,6 +711,7 @@ parentOff      match offset, or zero for literals</pre>
         <h2>A small cost dispute</h2>
         <p>Suppose the offset takes 22 bits. A match also needs a token byte, so a short match starts with about 30 bits of overhead before length extensions. Replacing four literal bytes saves only 32 payload bits. That is barely a win, and parser penalties can erase it.</p>
         <p>Replacing twenty bytes is different. The literal version costs around 160 payload bits, while the match still pays the same offset and token overhead. The longer the copied phrase, the less that fixed overhead matters.</p>
+        <p>The calculator makes the threshold visible. In this simplified range there are no length-extension bytes, so the match price is just <code>8 + offsetBits</code>; literals cost <code>8 * len</code>.</p>
         <p>This is why frontier does not simply prefer the longest match. It prefers the cheapest complete route.</p>
       </div>
       <figure class="figure">
@@ -685,6 +738,18 @@ parentOff      match offset, or zero for literals</pre>
           </g>
         </svg>
         <figcaption class="caption">The constants move with offset width and extension thresholds; the curve is the lesson.</figcaption>
+        <div class="calc" aria-label="literal versus match cost calculator">
+          <div class="calc-controls">
+            <label>Match length <input id="matchLen" type="range" min="4" max="32" value="12"></label>
+            <label>Offset bits <select id="offsetBits"><option>16</option><option>18</option><option>20</option><option selected>22</option></select></label>
+          </div>
+          <div class="calc-output">
+            <div><b>literal cost</b><span id="literalBits">96 bits</span></div>
+            <div><b>match cost</b><span id="matchBits">30 bits</span></div>
+            <div><b>match saves</b><span id="savedBits">66 bits</span></div>
+          </div>
+          <div class="calc-note" id="calcNote">len 12 with 22-bit offsets: literals cost 12 * 8 = 96 bits; match costs 8 + 22 = 30 bits.</div>
+        </div>
       </figure>
     </div>
   </section>
@@ -1072,6 +1137,12 @@ while node is inside the window:
   const greedyRoute = document.getElementById("greedyRoute");
   const frontierRoute = document.getElementById("frontierRoute");
   const routeRows = document.querySelectorAll("[data-route-row]");
+  const matchLen = document.getElementById("matchLen");
+  const offsetBits = document.getElementById("offsetBits");
+  const literalBits = document.getElementById("literalBits");
+  const matchBits = document.getElementById("matchBits");
+  const savedBits = document.getElementById("savedBits");
+  const calcNote = document.getElementById("calcNote");
   const statuses = [
     "Start: cost[0] = 0. Every later boundary is still unknown.",
     "Literal relaxation adds 8 bits: cost[i + 1] = min(cost[i + 1], cost[i] + 8).",
@@ -1097,6 +1168,18 @@ while node is inside the window:
     });
   });
   greedyRoute.classList.add("hotline");
+
+  const updateCalc = () => {
+    const len = Number(matchLen.value), off = Number(offsetBits.value);
+    const lc = len * 8, mc = 8 + off, save = lc - mc;
+    literalBits.textContent = `${lc} bits`;
+    matchBits.textContent = `${mc} bits`;
+    savedBits.textContent = save >= 0 ? `${save} bits` : `${-save} bits lost`;
+    calcNote.textContent = `len ${len} with ${off}-bit offsets: literals cost ${len} * 8 = ${lc} bits; match costs 8 + ${off} = ${mc} bits.`;
+  };
+  matchLen.addEventListener("input", updateCalc);
+  offsetBits.addEventListener("change", updateCalc);
+  updateCalc();
 
   letters.forEach((x, i) => {
     const b = document.createElement("div");
