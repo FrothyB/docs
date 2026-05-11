@@ -322,6 +322,58 @@
     color: var(--teal);
     font-family: ui-sans-serif, system-ui, sans-serif;
   }
+  .parse-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .parse-controls button {
+    appearance: none;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--white);
+    color: var(--ink);
+    cursor: pointer;
+    font: 800 13px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .parse-controls button.active {
+    border-color: rgba(55,104,166,.55);
+    background: #e9f1fb;
+    color: var(--blue);
+  }
+  .sample-visual {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+  }
+  .sample-visual span {
+    min-width: 22px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    font: 850 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .sample-visual .lit { background: #fff6e4; border-color: rgba(170,118,0,.45); color: #7a5600; }
+  .sample-visual .match { background: #e9f1fb; border-color: rgba(55,104,166,.48); color: var(--blue); }
+  .sample-visual .space { color: var(--muted); }
+  .visual-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+    color: var(--muted);
+    font: 800 12px/1 ui-sans-serif, system-ui, sans-serif;
+  }
   .compare {
     width: 100%;
     border-collapse: collapse;
@@ -833,8 +885,16 @@ parentOff      match offset, or zero for literals</pre>
           </g>
         </svg>
         <div class="sandbox" aria-label="editable compression example">
-          <textarea id="sampleText" spellcheck="false">abracadabra abracadabra abracadabra!
-abracadabra has local traps: abracadabracadabra</textarea>
+          <textarea id="sampleText" spellcheck="false">abcdq cdefghijxxabcdefghij</textarea>
+          <div class="parse-controls" aria-label="parse display controls">
+            <button class="active" type="button" data-scheme="lazy">Lazy</button>
+            <button type="button" data-scheme="opt">btopt</button>
+          </div>
+          <div class="sample-visual" id="sampleVisual" aria-label="highlighted parse"></div>
+          <div class="visual-legend">
+            <span class="key"><i class="swatch gold"></i>literal bytes</span>
+            <span class="key"><i class="swatch blue"></i>match bytes</span>
+          </div>
           <div class="sandbox-output">
             <div><b>input</b><span id="toyInputBytes">0 bytes</span></div>
             <div><b>literal only</b><span id="toyLiteralBits">0 bits</span></div>
@@ -1264,6 +1324,8 @@ while node is inside the window:
   const toyOptBits = document.getElementById("toyOptBits");
   const toyLazyTokens = document.getElementById("toyLazyTokens");
   const toyOptTokens = document.getElementById("toyOptTokens");
+  const sampleVisual = document.getElementById("sampleVisual");
+  let activeScheme = "lazy", toyParses = { lazy: { tokens: [] }, opt: { tokens: [] } };
   const statuses = [
     "Start: cost[0] = 0. Every later boundary is still unknown.",
     "Literal relaxation adds 8 bits: cost[i + 1] = min(cost[i + 1], cost[i] + 8).",
@@ -1302,8 +1364,8 @@ while node is inside the window:
   offsetBits.addEventListener("change", updateCalc);
   updateCalc();
 
-  const printable = s => s.replaceAll("\n", "\\n").replaceAll("\t", "\\t").replaceAll(" ", "·");
-  const tokenText = t => t.slice(0, 26).map(x => x.off ? `M${x.len}@-${x.off}` : `L${x.len}(${printable(x.s)})`).join("  ") + (t.length > 26 ? " ..." : "");
+  const printable = s => s.replaceAll("\n", "\\n").replaceAll("\t", "\\t").replaceAll(" ", "_");
+  const tokenText = t => t.slice(0, 26).map(x => x.off ? `M${x.len}@${x.start}<- ${x.off}` : `L${x.len}(${printable(x.s)})`).join("  ") + (t.length > 26 ? " ..." : "");
   const bestMatch = (s, pos) => {
     let best = { len: 0, off: 0 };
     for (let j = 0; j + 4 <= pos; ++j) {
@@ -1313,7 +1375,7 @@ while node is inside the window:
     }
     return best;
   };
-  const flushLit = (tokens, s, a, b) => { if (b > a) tokens.push({ s: s.slice(a, b), len: b - a, off: 0 }); };
+  const flushLit = (tokens, s, a, b) => { if (b > a) tokens.push({ start: a, s: s.slice(a, b), len: b - a, off: 0 }); };
   const lazyParse = (s, offBits) => {
     const mc = 8 + offBits, tokens = [];
     let i = 0, lit = 0, bits = 0;
@@ -1322,7 +1384,7 @@ while node is inside the window:
       const useNext = n.len * 8 - mc > m.len * 8 - mc;
       const chosen = useNext ? n : m, skip = useNext ? 1 : 0;
       if (chosen.len >= 4 && chosen.len * 8 > mc) {
-        flushLit(tokens, s, lit, i + skip); tokens.push(chosen);
+        flushLit(tokens, s, lit, i + skip); tokens.push({ start: i + skip, len: chosen.len, off: chosen.off });
         bits += (i + skip - lit) * 8 + mc; i += skip + chosen.len; lit = i;
       } else ++i;
     }
@@ -1339,7 +1401,7 @@ while node is inside the window:
       for (let len = 4; len <= m.len; ++len) if (cost[i] + mc < cost[i + len]) { cost[i + len] = cost[i] + mc; parent[i + len] = { p: i, len, off: m.off }; }
     }
     const rev = [];
-    for (let i = n; i;) { const e = parent[i]; rev.push(e.off ? { len: e.len, off: e.off } : { s: s.slice(e.p, i), len: i - e.p, off: 0 }); i = e.p; }
+    for (let i = n; i;) { const e = parent[i]; rev.push(e.off ? { start: e.p, len: e.len, off: e.off } : { start: e.p, s: s.slice(e.p, i), len: i - e.p, off: 0 }); i = e.p; }
     const raw = rev.reverse(), tokens = [];
     for (const x of raw) {
       const last = tokens[tokens.length - 1];
@@ -1348,15 +1410,34 @@ while node is inside the window:
     }
     return { bits: cost[n], tokens };
   };
+  const paintSample = () => {
+    const parse = toyParses[activeScheme], cls = Array(sampleText.value.slice(0, 180).length).fill("lit");
+    parse.tokens.forEach(t => { for (let i = t.start; i < t.start + t.len && i < cls.length; ++i) cls[i] = t.off ? "match" : "lit"; });
+    sampleVisual.replaceChildren(...sampleText.value.slice(0, 180).split("").map((ch, i) => {
+      const span = document.createElement("span");
+      span.className = `${cls[i]}${ch === " " ? " space" : ""}`;
+      span.textContent = ch === " " ? "_" : ch === "\n" ? "\\n" : ch;
+      return span;
+    }));
+  };
   const updateToy = () => {
     const s = sampleText.value.slice(0, 180), off = Number(offsetBits.value), lazy = lazyParse(s, off), opt = optParse(s, off), raw = s.length * 8;
+    toyParses = { lazy, opt };
     toyInputBytes.textContent = `${s.length} bytes`;
     toyLiteralBits.textContent = `${raw} bits`;
     toyLazyBits.textContent = `${lazy.bits} bits`;
     toyOptBits.textContent = `${opt.bits} bits`;
     toyLazyTokens.textContent = tokenText(lazy.tokens);
     toyOptTokens.textContent = tokenText(opt.tokens);
+    paintSample();
   };
+  document.querySelectorAll("[data-scheme]").forEach(button => {
+    button.addEventListener("click", () => {
+      activeScheme = button.dataset.scheme;
+      document.querySelectorAll("[data-scheme]").forEach(b => b.classList.toggle("active", b === button));
+      paintSample();
+    });
+  });
   sampleText.addEventListener("input", updateToy);
   offsetBits.addEventListener("change", updateToy);
   updateToy();
