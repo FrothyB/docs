@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ZX2 Frontier Parser</title>
+<title>btopt: the ZX2 Binary-Tree Optimal Parser</title>
 <style>
   :root {
     color-scheme: light;
@@ -264,6 +264,64 @@
     color: #303a36;
     font-weight: 750;
   }
+  .sandbox {
+    padding: 18px;
+    border-top: 1px solid var(--line);
+    background: #fbfdfc;
+    font: 14px/1.4 ui-sans-serif, system-ui, sans-serif;
+  }
+  .sandbox textarea {
+    width: 100%;
+    min-height: 120px;
+    resize: vertical;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+    color: var(--ink);
+    font: 800 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .sandbox-output {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .sandbox-output div {
+    min-height: 74px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+  }
+  .sandbox-output b {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--muted);
+    font: 800 12px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .sandbox-output span {
+    color: var(--ink);
+    font: 850 20px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .tokens {
+    margin-top: 12px;
+    display: grid;
+    gap: 7px;
+  }
+  .tokens div {
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--white);
+    overflow-x: auto;
+    white-space: nowrap;
+    font: 13px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .tokens b {
+    color: var(--teal);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
   .compare {
     width: 100%;
     border-collapse: collapse;
@@ -500,7 +558,7 @@
     .hero h1 { font-size: 52px; }
     .dek { font-size: 22px; }
     h2 { font-size: 32px; }
-    .grid, .split, .two, .score, .knobs, .statecards, .calc-controls, .calc-output { grid-template-columns: 1fr; }
+    .grid, .split, .two, .score, .knobs, .statecards, .calc-controls, .calc-output, .sandbox-output { grid-template-columns: 1fr; }
     .mini div { grid-template-columns: 1fr; gap: 6px; }
     .rail { grid-template-columns: repeat(3, 1fr); }
     .bytes { grid-template-columns: repeat(9, 1fr); }
@@ -511,11 +569,11 @@
 <body>
   <header class="hero">
     <div class="wrap">
-      <h1>The ZX2 frontier parser</h1>
-      <p class="dek">Frontier mode lets the compressor read a short stretch of input as a landscape of costs: literals as steady ground, matches as bridges, and the chosen parse as the least expensive crossing.</p>
+      <h1>btopt</h1>
+      <p class="dek">The binary-tree optimal ZX2 parser: turn a short stretch of input into a graph of literal and match edges, then emit the cheapest path through it.</p>
       <div class="meta">
         <span class="pill">Core/misc/ZX2.hpp</span>
-        <span class="pill">segmented dynamic programming</span>
+        <span class="pill">btopt / segmented DP</span>
         <span class="pill">BT-backed match search</span>
       </div>
     </div>
@@ -525,13 +583,14 @@
     <div class="wrap grid">
       <div>
         <h2>The parser's bargain</h2>
-        <p class="lead">ZX2 is an LZ compressor: its output is a sequence of literal bytes and backward references into text already seen. The decoder follows those instructions mechanically. The parser has the harder, more interesting task: deciding which instructions should exist.</p>
+        <p class="lead">ZX2 is an LZ compressor: its output is a sequence of literal bytes and backward references into text already seen. The decoder follows those instructions mechanically. The parser has the harder problem: deciding which instructions should exist.</p>
         <p>A literal is the direct statement of a byte. A match is an abbreviation: pay for a token, an offset, and sometimes extra length, then recover many bytes by reference. A repeat in the input is only an opportunity; it becomes a match only when the abbreviation is cheaper than the words it replaces.</p>
-        <p>The parser chooses the mixture of literal runs and matches before anything reaches the decoder. Frontier mode gives that choice a wider field of view: it prices a bounded stretch of input as a whole, rather than letting the nearest attractive match decide the future.</p>
+        <p>btopt is the parser mode that treats this as an optimization problem. Over a bounded segment, every byte boundary is a vertex; every legal literal or match is a directed edge; every edge has the exact number of bits it will cost in the ZX2 stream. The parse is the minimum-cost path.</p>
+        <p>For a cursory read, that is the whole idea: btopt spends encoder work to buy non-local decisions while the decoder stays unchanged. The rest of the page unpacks what "minimum", "bounded", and "legal edge" mean in the actual implementation.</p>
         <div class="mini">
           <div><b>Literal run</b><span>Raw bytes written directly. Excellent for new material, wasteful when the same phrase has already appeared.</span></div>
           <div><b>Match</b><span>A length plus an offset. It earns its keep only when the copied phrase is long enough to repay the token and offset overhead.</span></div>
-          <div><b>Parser</b><span>The optimizer that chooses the final sequence of literal runs and matches before the decoder ever sees a byte.</span></div>
+          <div><b>btopt</b><span>A segmented shortest-path parser using a binary-tree match finder to propose useful match edges.</span></div>
         </div>
       </div>
       <figure class="figure">
@@ -576,7 +635,7 @@
       <div>
         <h2>The trap one byte later</h2>
         <p class="lead">Parsing is full of near misses. At byte 1000 a decent repeated phrase may begin; at byte 1001, a better one. A local parser can spend its one chance too soon.</p>
-        <p>The lazy parser handles the simplest form of that problem by peeking one byte ahead. ZX2 frontier mode gives itself a longer horizon. It treats the next segment as a map: every byte boundary is a position, and every literal or match is a forward edge.</p>
+        <p>The lazy parser handles the simplest form of that problem by peeking one byte ahead. btopt gives itself a longer horizon. It treats the next segment as a map: every byte boundary is a position, and every literal or match is a forward edge.</p>
         <p>The question stops being "which match looks best here?" and becomes "which route reaches the segment end at the lowest encoded cost?"</p>
         <div class="rail" aria-label="toy repeated input">
           <span class="cool">a</span><span>b</span><span>r</span><span>a</span><span>c</span><span>a</span>
@@ -609,21 +668,21 @@
           <g font-family="ui-sans-serif, system-ui" font-size="14" font-weight="850">
             <rect x="482" y="118" width="190" height="92" rx="8" fill="#ffffff" stroke="#c9d7d1"/>
             <text x="500" y="148" fill="#087d78">greedy: L + M3 + 3L = 62</text>
-            <text x="500" y="178" fill="#b43d45">frontier: 2L + M4 + L = 54</text>
+            <text x="500" y="178" fill="#b43d45">btopt: 2L + M4 + L = 54</text>
             <text x="500" y="198" fill="#65716d" font-size="12">lower total wins</text>
           </g>
         </svg>
         <figcaption class="caption">Toggle the route. With this toy cost model, the tempting local match is 8 bits worse once the whole segment is priced.</figcaption>
         <div class="choicebar" aria-label="route comparison controls">
           <button class="active" type="button" data-route="greedy">Greedy candidate</button>
-          <button type="button" data-route="frontier">Frontier route</button>
+          <button type="button" data-route="frontier">btopt route</button>
         </div>
         <div class="route-note" id="routeNote">Greedy takes the first shortcut: one literal, a 3-byte match, then three literals. Total: 8 + 30 + 24 = 62 bits.</div>
         <table class="route-data" aria-label="toy route cost comparison">
           <thead><tr><th>Route</th><th>Moves</th><th>Total</th></tr></thead>
           <tbody>
             <tr class="active" data-route-row="greedy"><td>Greedy</td><td><code>L0</code>, <code>M1->4</code>, <code>L4</code>, <code>L5</code>, <code>L6</code></td><td>62 bits</td></tr>
-            <tr data-route-row="frontier"><td>Frontier</td><td><code>L0</code>, <code>L1</code>, <code>M2->6</code>, <code>L6</code></td><td>54 bits</td></tr>
+            <tr data-route-row="frontier"><td>btopt</td><td><code>L0</code>, <code>L1</code>, <code>M2->6</code>, <code>L6</code></td><td>54 bits</td></tr>
           </tbody>
         </table>
       </figure>
@@ -633,10 +692,10 @@
   <section class="band">
     <div class="wrap grid">
       <div>
-        <h2>What "frontier" means here</h2>
-        <p>Imagine a survey line moving left to right. Behind it, every byte boundary already has a best known cost. At the line, the parser extends that cost forward: one literal step, or one match edge.</p>
+        <h2>btopt as a frontier</h2>
+        <p>Imagine a survey line moving left to right. Behind it, every byte boundary already has a best known cost. At the line, btopt extends that cost forward: one literal step, or one match edge.</p>
         <p>The literal step is always available: append one raw byte and advance. A match edge appears only when the BT match finder returns a repeated phrase whose encoded cost beats writing those bytes literally.</p>
-        <p>The "frontier" is not a grand object in the code. It is a compact table of best-known futures:</p>
+        <p>The frontier is not a grand object in the code. It is a compact dynamic-programming table of best-known futures:</p>
         <pre class="codebox">cost[rel]      best cost to reach byte rel
 parent[rel]    previous position on the winning path
 parentLen      emitted literal length or match length
@@ -647,7 +706,7 @@ parentOff      match offset, or zero for literals</pre>
           <div class="statecard"><b>Traceback</b><code>parent == UINT32_MAX</code> marks a literal stretch; any real parent marks a match jump.</div>
         </div>
       </div>
-      <figure class="figure sim" aria-label="animated frontier table">
+      <figure class="figure sim" aria-label="animated btopt table">
         <div class="bytes" id="bytes"></div>
         <div class="costgrid" id="costgrid"></div>
         <div class="status" id="status"></div>
@@ -661,12 +720,12 @@ parentOff      match offset, or zero for literals</pre>
       <div>
         <h2>The accounting is in bits</h2>
         <p class="lead">The map only works because every edge has a real price. ZX2 charges exactly what the stream will later write: token bits, offset bits, literal payload bytes, and extension bytes.</p>
-        <p>A literal edge usually costs one payload byte. But literal runs have length fields, and at exact thresholds one more literal also requires another extension byte. That is why the frontier carries <code>litExtLeft</code>, a small countdown to the next literal-length boundary.</p>
+        <p>A literal edge usually costs one payload byte. But literal runs have length fields, and at exact thresholds one more literal also requires another extension byte. That is why btopt carries <code>litExtLeft</code>, a small countdown to the next literal-length boundary.</p>
         <p>A match edge is front-loaded: one token plus raw offset bits, with extra length bytes only for long matches. In the source this is <code>matchLenCost8</code>; despite the suffix, the values are ordinary bit counts.</p>
       </div>
       <div>
         <figure class="figure">
-          <svg viewBox="0 0 760 470" role="img" aria-label="frontier state transition equation">
+          <svg viewBox="0 0 760 470" role="img" aria-label="btopt state transition equation">
             <rect width="760" height="470" fill="#ffffff"/>
             <text x="48" y="56" fill="#13201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="850">One state, two ways to spend</text>
             <text x="48" y="86" fill="#5f6f69" font-family="ui-sans-serif, system-ui" font-size="16">At byte rel, the current cost is pushed into future byte positions.</text>
@@ -692,7 +751,7 @@ parentOff      match offset, or zero for literals</pre>
               <text x="20" y="34" fill="#13201c">relax(dst, newCost): if newCost &lt; cost[dst], replace cost and parent</text>
             </g>
           </svg>
-          <figcaption class="caption">Frontier mode is exact for the graph it actually builds. The approximation is in which states and match candidates are allowed into that graph.</figcaption>
+          <figcaption class="caption">btopt is exact for the graph it actually builds. The approximation is in which states and match candidates are allowed into that graph.</figcaption>
         </figure>
         <p>The accounting stays integer and mechanical: no floats, no entropy estimate, no probabilistic model. The parser is only asking which tokenization is cheaper under ZX2's own format.</p>
         <div class="score">
@@ -712,7 +771,7 @@ parentOff      match offset, or zero for literals</pre>
         <p>Suppose the offset takes 22 bits. A match also needs a token byte, so a short match starts with about 30 bits of overhead before length extensions. Replacing four literal bytes saves only 32 payload bits. That is barely a win, and parser penalties can erase it.</p>
         <p>Replacing twenty bytes is different. The literal version costs around 160 payload bits, while the match still pays the same offset and token overhead. The longer the copied phrase, the less that fixed overhead matters.</p>
         <p>The calculator makes the threshold visible. In this simplified range there are no length-extension bytes, so the match price is just <code>8 + offsetBits</code>; literals cost <code>8 * len</code>.</p>
-        <p>This is why frontier does not simply prefer the longest match. It prefers the cheapest complete route.</p>
+        <p>This is why btopt does not simply prefer the longest match. It prefers the cheapest complete route.</p>
       </div>
       <figure class="figure">
         <svg viewBox="0 0 760 410" role="img" aria-label="match cost amortization">
@@ -755,12 +814,49 @@ parentOff      match offset, or zero for literals</pre>
   </section>
 
   <section>
+    <div class="wrap grid">
+      <div>
+        <h2>Change the input</h2>
+        <p class="lead">A parser is easiest to understand when the text fights back. Edit the sample and watch a toy lazy parse compete with a toy btopt parse.</p>
+        <p>The model here deliberately uses the same simple costs as the diagrams: each literal byte costs 8 bits, and each match costs one token byte plus the selected offset width. It is not a byte-for-byte ZX2 encoder, but it preserves the mathematical issue: local matches can be globally expensive.</p>
+        <p>btopt wins by delaying commitment. Lazy chooses as it walks. btopt fills the cost table first, then reads the path backward. That single pause is the raison d'etre of the algorithm.</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 760 300" role="img" aria-label="interactive parse model">
+          <rect width="760" height="300" fill="#fffdfa"/>
+          <text x="48" y="54" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="850">The objective function</text>
+          <text x="48" y="84" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">For a token sequence T, btopt approximates this minimization over one segment.</text>
+          <g transform="translate(62 142)" font-family="ui-monospace, Menlo, monospace">
+            <rect x="0" y="0" width="630" height="92" rx="8" fill="#eef5f2" stroke="#c9d7d1"/>
+            <text x="24" y="38" fill="#13201c" font-size="18" font-weight="850">C(T) = sum literal_payload_bits + sum match_token_bits</text>
+            <text x="24" y="66" fill="#13201c" font-size="18" font-weight="850">btopt segment = argmin C(T), subject to legal backward references</text>
+          </g>
+        </svg>
+        <div class="sandbox" aria-label="editable compression example">
+          <textarea id="sampleText" spellcheck="false">abracadabra abracadabra abracadabra!
+abracadabra has local traps: abracadabracadabra</textarea>
+          <div class="sandbox-output">
+            <div><b>input</b><span id="toyInputBytes">0 bytes</span></div>
+            <div><b>literal only</b><span id="toyLiteralBits">0 bits</span></div>
+            <div><b>lazy parse</b><span id="toyLazyBits">0 bits</span></div>
+            <div><b>btopt parse</b><span id="toyOptBits">0 bits</span></div>
+          </div>
+          <div class="tokens">
+            <div><b>lazy</b> <span id="toyLazyTokens"></span></div>
+            <div><b>btopt</b> <span id="toyOptTokens"></span></div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section>
     <div class="wrap">
       <h2>The whole algorithm in five moves</h2>
       <div class="timeline">
         <div class="step">
           <div class="num">1</div>
-          <p><strong>Cut the input into segments.</strong> The current code uses <code>ZX2_FRONTIER_SEGMENT</code>, default 32768 bytes. Each segment becomes one bounded route-planning problem.</p>
+          <p><strong>Cut the input into segments.</strong> The current code uses <code>ZX2_FRONTIER_SEGMENT</code>, default 32768 bytes. Each segment becomes one bounded btopt route-planning problem.</p>
         </div>
         <div class="step">
           <div class="num">2</div>
@@ -776,7 +872,7 @@ parentOff      match offset, or zero for literals</pre>
         </div>
         <div class="step">
           <div class="num">5</div>
-          <p><strong>Trace back and emit.</strong> Once <code>cost[segN]</code> is finite, ZX2 follows <code>parent[]</code> backward, reverses the route, and feeds those literal runs and matches into <code>BlockBuilder</code>.</p>
+          <p><strong>Trace back and emit.</strong> Once <code>cost[segN]</code> is finite, btopt follows <code>parent[]</code> backward, reverses the route, and feeds those literal runs and matches into <code>BlockBuilder</code>.</p>
         </div>
       </div>
     </div>
@@ -786,7 +882,7 @@ parentOff      match offset, or zero for literals</pre>
     <div class="wrap grid">
       <div>
         <h2>The code, translated</h2>
-        <p>The loop in <code>ZX2Compressor::compress</code> is short because the graph has no cycles. It does dynamic programming, literal-run phase tracking, BT match generation, and traceback in one forward sweep plus one backward pass.</p>
+        <p>The btopt loop in <code>ZX2Compressor::compress</code> is short because the graph has no cycles. It does dynamic programming, literal-run phase tracking, BT match generation, and traceback in one forward sweep plus one backward pass.</p>
         <pre class="codebox">for each segment:
     cost[0] = 0
 
@@ -808,7 +904,7 @@ parentOff      match offset, or zero for literals</pre>
         <h3>Why parent pointers are enough</h3>
         <p>Once <code>cost[segN]</code> is final, the route is written backward in <code>parent[]</code>. A missing parent marks a literal stretch; a real predecessor marks a match jump with <code>parentLen</code> and <code>parentOff</code>.</p>
         <h3>Why replay instead of emitting immediately</h3>
-        <p>Immediate emission would put the parser back in the local-choice trap. Frontier mode first decides the whole segment route, then emits. That pause is the trick.</p>
+        <p>Immediate emission would put the parser back in the local-choice trap. btopt first decides the whole segment route, then emits. That pause is the trick.</p>
       </div>
     </div>
   </section>
@@ -817,10 +913,11 @@ parentOff      match offset, or zero for literals</pre>
     <div class="wrap grid">
       <div>
         <h2>The tree that finds matches</h2>
-        <p class="lead">The frontier table decides which route is cheapest. The binary tree supplies candidate match edges quickly enough for that decision to be worth making.</p>
+        <p class="lead">The btopt cost table decides which route is cheapest. The binary tree supplies candidate match edges quickly enough for that decision to be worth making.</p>
         <p>For each 4-byte hash, ZX2 keeps a tree of previous positions whose next bytes start the same way. Each node is an old source position. One child points toward lexicographically smaller suffixes; the other points toward larger suffixes.</p>
         <p>At a new position, the compressor descends that tree. Every visited old position is both a candidate match and a comparison point for insertion. The walk measures the common prefix, scores the match if it saves bits, then splices the current position into the same tree.</p>
         <p>The important refinement is the LCP bookkeeping: the walk carries lower bounds from the small and large sides, so it does not keep rereading bytes it already knows are equal. The search spends its attention on the first unknown byte, where the ordering decision actually lives.</p>
+        <p>A simpler hash-map match finder stores recent positions in a bucket and scans them as an unordered row. That is attractive for lazy parsing: low ceremony, predictable storage, good enough when you need one local answer. btopt asks a harder question at every byte, so candidate quality matters more. The tree spends a little structure to make the search resemble a suffix-order probe rather than a blind collision scan.</p>
         <div class="mini">
           <div><b><code>hashes[h]</code></b><span>The doorway into the old positions for this 4-byte hash bucket.</span></div>
           <div><b><code>btLinks[pos]</code></b><span>The two child links for one old source position, packed into a window-sized ring.</span></div>
@@ -870,11 +967,33 @@ while node is inside the window:
     </div>
   </section>
 
+  <section class="band">
+    <div class="wrap grid">
+      <div>
+        <h2>Binary tree vs hash row</h2>
+        <p class="lead">Both designs begin with the same 4-byte hash. The difference is what happens after the bucket is found.</p>
+        <p>A row hash table says: here are the last <code>k</code> positions with this prefix; compare them one by one. It is compact and often fastest for a lazy parser because the parser only needs to know whether the current position has a good enough match.</p>
+        <p>A binary tree says: among positions with this prefix, maintain an order by the full suffix. Searching for the current suffix then walks a changing set of near neighbors. Near neighbors in suffix order are exactly where long common prefixes live, so the work is better aimed at candidates that can matter.</p>
+        <p>The tree is not magic and not free. It has child links, updates on insertion, branchy comparisons, and a bounded <code>maxChain</code>. Its justification is that btopt multiplies match search by every byte in the segment. A weak candidate generator poisons the dynamic program with missing edges; a better one gives the optimizer enough graph to optimize.</p>
+      </div>
+      <div class="tablewrap">
+        <table class="compare" aria-label="binary tree versus hash row">
+          <thead><tr><th>Finder</th><th>Data structure</th><th>Best property</th><th>Failure mode</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Hash row</strong></td><td>Bucket plus recent-position ring.</td><td>Small, simple, cheap for local lazy decisions.</td><td>Scans collisions with little suffix-order information.</td></tr>
+            <tr><td><strong>Binary tree</strong></td><td>Bucket root plus small/large suffix links.</td><td>Walk tends toward suffix neighbors, so long matches appear sooner.</td><td>More pointer chasing and insertion work in the hot encoder loop.</td></tr>
+            <tr><td><strong>Suffix array</strong></td><td>Global sorted suffix order.</td><td>Mathematically clean offline search.</td><td>Too static and expensive for this rolling-window encoder.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section>
     <div class="wrap grid">
       <div>
         <h2>Segments bound the horizon</h2>
-        <p class="lead">A whole-block optimal parser would let an early decision compete with every later consequence. ZX2 chooses a smaller, more tractable horizon.</p>
+        <p class="lead">A whole-block optimal parser would let an early decision compete with every later consequence. btopt chooses a smaller, more tractable horizon.</p>
         <p>Inside a segment, it finds the best route under its candidate model. At the boundary, it commits. That is why the arrays are sized by <code>ZX2_FRONTIER_SEGMENT + 1</code> instead of by the whole block: memory stays bounded, cache behavior stays sane, and the parser has a fixed horizon.</p>
         <p>One border rule is worth keeping: pending literals can cross a segment boundary. If one segment ends with raw bytes and the next begins with raw bytes, ZX2 can keep them as one literal run, preserving the literal-extension accounting.</p>
       </div>
@@ -906,10 +1025,10 @@ while node is inside the window:
   <section class="band">
     <div class="wrap grid">
       <div>
-        <h2>Not full optimal parsing</h2>
-        <p>"Frontier" should not be read as a promise of exhaustive optimality. The code is more restrained than that.</p>
-        <p>It keeps one winning state per byte position: one cost, one literal-extension countdown, one parent. It also takes one best scored match from the BT at each start position. It does not keep a portfolio of near-tie literal phases, multiple lengths for the same offset, or several offsets whose prices are close.</p>
-        <p>That restraint is the point: far less myopic than greedy lazy parsing, but still small enough to reason about and cheap enough to run as an encoder mode.</p>
+        <h2>Optimal, after modeling</h2>
+        <p>"Optimal" in btopt has a precise scope. Once the segment length, state representation, legal edges, and candidate matches are fixed, the dynamic program finds the cheapest path through that graph. It is not claiming the globally shortest possible ZX2 stream among every conceivable match candidate in the whole block.</p>
+        <p>The implementation keeps one winning state per byte position: one cost, one literal-extension countdown, one parent. It also takes one best scored match from the BT at each start position. It does not keep a portfolio of near-tie literal phases, multiple lengths for the same offset, or several offsets whose prices are close.</p>
+        <p>That restraint is the point and the raison d'etre: far less myopic than greedy lazy parsing, but still small enough to reason about and cheap enough to run as an encoder mode.</p>
       </div>
       <div class="split">
         <div class="note">
@@ -917,11 +1036,11 @@ while node is inside the window:
           <p>Take the best local match, maybe with one lazy lookahead. Fast, but easily misled.</p>
         </div>
         <div class="note" style="border-left-color: var(--red)">
-          <strong>Frontier</strong>
+          <strong>btopt</strong>
           <p>Keep the cheapest surviving state at each byte. Broader view, still compact.</p>
         </div>
         <div class="note" style="border-left-color: var(--blue)">
-          <strong>Optimal</strong>
+          <strong>Richer optimal</strong>
           <p>Keep many competing states and candidates. Stronger ratio, much more parser work.</p>
         </div>
       </div>
@@ -935,7 +1054,7 @@ while node is inside the window:
       <div class="knobs">
         <div class="knob">
           <h3><code>algorithm</code><span class="tag">parser</span></h3>
-          <p>Selects the parsing strategy. <code>Lazy</code> makes quick local choices. <code>Frontier</code> spends encoder work to plan a segment route. The emitted tokens change, but the decoder still reads the same ZX2 stream family.</p>
+          <p>Selects the parsing strategy. <code>Lazy</code> makes quick local choices. The source enum currently names btopt as <code>ZX2Algorithm::Frontier</code>; that branch spends encoder work to plan a segment route. The emitted tokens change, but the decoder still reads the same ZX2 stream family.</p>
           <div class="direction"><span>fast local choices</span><i></i><span>slower segment planning</span></div>
         </div>
         <div class="knob">
@@ -965,23 +1084,18 @@ while node is inside the window:
         </div>
         <div class="knob">
           <h3><code>chainBits</code><span class="tag speed">storage</span></h3>
-          <p>Controls the ring size used for match links. Frontier mode's binary tree wants this to match the window bits, because child references are stored as deltas in that window-sized ring. Lazy mode can use row storage instead.</p>
+          <p>Controls the ring size used for match links. btopt's binary tree wants this to match the window bits, because child references are stored as deltas in that window-sized ring. Lazy mode can use row storage instead.</p>
           <div class="direction"><span>smaller link ring</span><i></i><span>full-window BT links</span></div>
         </div>
         <div class="knob">
-          <h3><code>ZX2_FRONTIER_SEGMENT_VALUE</code><span class="tag">frontier</span></h3>
+          <h3><code>ZX2_FRONTIER_SEGMENT_VALUE</code><span class="tag">btopt</span></h3>
           <p>Sets the byte length of one route-planning problem. Larger segments give the parser a longer horizon and larger arrays; smaller segments commit sooner and spend less state. It changes encoder decisions, not the decoder format.</p>
           <div class="direction"><span>less parser state</span><i></i><span>longer planning horizon</span></div>
         </div>
         <div class="knob">
-          <h3><code>ZX2_FRONTIER_GOOD_ENOUGH_LENGTH_VALUE</code><span class="tag speed">frontier</span></h3>
+          <h3><code>ZX2_FRONTIER_GOOD_ENOUGH_LENGTH_VALUE</code><span class="tag speed">btopt</span></h3>
           <p>Lets the BT search stop scoring once it has found a match of a chosen length. Zero means disabled. It is a speed shortcut, useful only when it does not discard a match that would alter the segment path.</p>
           <div class="direction"><span>exhaustive scoring</span><i></i><span>earlier stop</span></div>
-        </div>
-        <div class="knob">
-          <h3><code>ZX2_FRONTIER_SKIP_PERIOD_VALUE</code><span class="tag speed">frontier</span></h3>
-          <p>Skips insertion on a regular cadence while still walking the existing BT for scoring. It reduces tree churn and memory traffic, but some future positions never become match candidates.</p>
-          <div class="direction"><span>denser BT history</span><i></i><span>less insertion work</span></div>
         </div>
         <div class="knob">
           <h3><code>ZX2_MIN_MATCH_LENGTH_VALUE</code><span class="tag format">format</span></h3>
@@ -995,7 +1109,7 @@ while node is inside the window:
         </div>
         <div class="knob">
           <h3><code>ZX2_MIN_MATCH_GAIN8_VALUE</code><span class="tag">parser bias</span></h3>
-          <p>Requires a match to beat literals by extra cost before the lazy scorer accepts it. It is a bias against marginal matches. Frontier mostly uses the direct parser save table, but the philosophy is the same: tiny wins are not always worth another match op.</p>
+          <p>Requires a match to beat literals by extra cost before the lazy scorer accepts it. It is a bias against marginal matches. btopt mostly uses the direct parser save table, but the philosophy is the same: tiny wins are not always worth another match op.</p>
           <div class="direction"><span>accept marginal wins</span><i></i><span>demand clearer wins</span></div>
         </div>
         <div class="knob">
@@ -1015,7 +1129,7 @@ while node is inside the window:
         </div>
         <div class="knob">
           <h3><code>huffman</code><span class="tag format">second pass</span></h3>
-          <p>Optionally Huffman-compresses the split streams after the LZ parse. It changes the block payload representation, not the frontier decision process itself. Useful when the extra encode/decode stage saves enough bytes to justify the work.</p>
+          <p>Optionally Huffman-compresses the split streams after the LZ parse. It changes the block payload representation, not the btopt decision process itself. Useful when the extra encode/decode stage saves enough bytes to justify the work.</p>
           <div class="direction"><span>raw split streams</span><i></i><span>extra entropy pass</span></div>
         </div>
       </div>
@@ -1024,8 +1138,8 @@ while node is inside the window:
 
   <section>
     <div class="wrap">
-      <h2>What frontier buys</h2>
-      <p class="wide">Frontier is a ratio mode, not a decoder idea. It spends compression CPU and encoder memory to choose better tokens, while decompression stays on the same simple ZX2 stream.</p>
+      <h2>What btopt buys</h2>
+      <p class="wide">btopt is a ratio mode, not a decoder idea. It spends compression CPU and encoder memory to choose better tokens, while decompression stays on the same simple ZX2 stream.</p>
       <div class="tablewrap">
         <table class="compare" aria-label="parser tradeoff table">
           <thead>
@@ -1039,7 +1153,7 @@ while node is inside the window:
               <td>Can miss choices whose benefit appears several bytes later.</td>
             </tr>
             <tr>
-              <td><strong>Frontier</strong></td>
+              <td><strong>btopt</strong></td>
               <td>What is the cheapest route through this segment?</td>
               <td>Finds non-local wins inside the segment using actual ZX2 token costs.</td>
               <td>Visits every byte, walks the BT, and stores traceback state.</td>
@@ -1056,7 +1170,7 @@ while node is inside the window:
       <div class="two">
         <div class="note">
           <strong>Decoder stays clean</strong>
-          <p>The compressed bytes are still ordinary ZX2 tokens. Frontier changes the encoder's choices, not the decoder's job.</p>
+          <p>The compressed bytes are still ordinary ZX2 tokens. btopt changes the encoder's choices, not the decoder's job.</p>
         </div>
         <div class="note" style="border-left-color: var(--red)">
           <strong>Compressor pays</strong>
@@ -1075,8 +1189,8 @@ while node is inside the window:
           <div><b>Constants</b><span><code>ZX2_FRONTIER_SEGMENT</code>, token bit split, offset width, and literal/match cost functions live near the top of <code>Core/misc/ZX2.hpp</code>.</span></div>
           <div><b>BT node links</b><span><code>BTLink</code> and <code>BTChildRef</code> define the compact small/large child links used by the binary tree.</span></div>
           <div><b>Match scoring</b><span><code>parserMatchSave8</code> precomputes how many bits a match can save over writing the same span as literals.</span></div>
-          <div><b>BT search</b><span><code>findBestAndInsertBT</code> fuses insertion and match lookup for frontier mode.</span></div>
-          <div><b>Parser loop</b><span>The <code>ZX2Algorithm::Frontier</code> branch in <code>ZX2Compressor::compress</code> fills <code>cost[]</code>, records parents, traces back, and replays.</span></div>
+          <div><b>BT search</b><span><code>findBestAndInsertBT</code> fuses insertion and match lookup for btopt.</span></div>
+          <div><b>Parser loop</b><span>The <code>ZX2Algorithm::Frontier</code> branch in <code>ZX2Compressor::compress</code> is the current implementation name for btopt; it fills <code>cost[]</code>, records parents, traces back, and replays.</span></div>
         </div>
       </div>
       <div>
@@ -1092,9 +1206,9 @@ while node is inside the window:
     <div class="wrap grid">
       <div>
         <h2>The working model</h2>
-        <p class="lead">ZX2 frontier mode is a small route planner inside the compressor.</p>
+        <p class="lead">btopt is a small route planner inside the ZX2 compressor.</p>
         <p>It walks a fixed-size segment. At every byte it asks: emit one more literal, or jump with the best match the BT can justify? It records the cheapest known way to reach future byte boundaries. At the end, traceback turns those remembered choices into ordinary ZX2 tokens.</p>
-        <p>The decoder never sees the planning. The output is still literal lengths, match lengths, offsets, and extension bytes. Frontier is encoder-only luxury: pay compression time now, usually get fewer bytes later.</p>
+        <p>The decoder never sees the planning. The output is still literal lengths, match lengths, offsets, and extension bytes. btopt is encoder-only luxury: pay compression time now, usually get fewer bytes later.</p>
       </div>
       <figure class="figure">
         <svg viewBox="0 0 760 360" role="img" aria-label="traceback path">
@@ -1143,6 +1257,13 @@ while node is inside the window:
   const matchBits = document.getElementById("matchBits");
   const savedBits = document.getElementById("savedBits");
   const calcNote = document.getElementById("calcNote");
+  const sampleText = document.getElementById("sampleText");
+  const toyInputBytes = document.getElementById("toyInputBytes");
+  const toyLiteralBits = document.getElementById("toyLiteralBits");
+  const toyLazyBits = document.getElementById("toyLazyBits");
+  const toyOptBits = document.getElementById("toyOptBits");
+  const toyLazyTokens = document.getElementById("toyLazyTokens");
+  const toyOptTokens = document.getElementById("toyOptTokens");
   const statuses = [
     "Start: cost[0] = 0. Every later boundary is still unknown.",
     "Literal relaxation adds 8 bits: cost[i + 1] = min(cost[i + 1], cost[i] + 8).",
@@ -1152,7 +1273,7 @@ while node is inside the window:
   ];
   const routeCopy = {
     greedy: "Greedy takes the first shortcut: one literal, a 3-byte match, then three literals. Total: 8 + 30 + 24 = 62 bits.",
-    frontier: "Frontier waits one more byte, buys the 4-byte shortcut, then emits one final literal. Total: 16 + 30 + 8 = 54 bits."
+    frontier: "btopt waits one more byte, buys the 4-byte shortcut, then emits one final literal. Total: 16 + 30 + 8 = 54 bits."
   };
 
   document.querySelectorAll("[data-route]").forEach(button => {
@@ -1180,6 +1301,65 @@ while node is inside the window:
   matchLen.addEventListener("input", updateCalc);
   offsetBits.addEventListener("change", updateCalc);
   updateCalc();
+
+  const printable = s => s.replaceAll("\n", "\\n").replaceAll("\t", "\\t").replaceAll(" ", "·");
+  const tokenText = t => t.slice(0, 26).map(x => x.off ? `M${x.len}@-${x.off}` : `L${x.len}(${printable(x.s)})`).join("  ") + (t.length > 26 ? " ..." : "");
+  const bestMatch = (s, pos) => {
+    let best = { len: 0, off: 0 };
+    for (let j = 0; j + 4 <= pos; ++j) {
+      let n = 0, max = Math.min(s.length - pos, s.length - j);
+      while (n < max && s.charCodeAt(j + n) === s.charCodeAt(pos + n)) ++n;
+      if (n >= 4 && (n > best.len || (n === best.len && pos - j < best.off))) best = { len: n, off: pos - j };
+    }
+    return best;
+  };
+  const flushLit = (tokens, s, a, b) => { if (b > a) tokens.push({ s: s.slice(a, b), len: b - a, off: 0 }); };
+  const lazyParse = (s, offBits) => {
+    const mc = 8 + offBits, tokens = [];
+    let i = 0, lit = 0, bits = 0;
+    while (i < s.length) {
+      const m = bestMatch(s, i), n = i + 1 < s.length ? bestMatch(s, i + 1) : { len: 0, off: 0 };
+      const useNext = n.len * 8 - mc > m.len * 8 - mc;
+      const chosen = useNext ? n : m, skip = useNext ? 1 : 0;
+      if (chosen.len >= 4 && chosen.len * 8 > mc) {
+        flushLit(tokens, s, lit, i + skip); tokens.push(chosen);
+        bits += (i + skip - lit) * 8 + mc; i += skip + chosen.len; lit = i;
+      } else ++i;
+    }
+    flushLit(tokens, s, lit, s.length);
+    return { bits: bits + (s.length - lit) * 8, tokens };
+  };
+  const optParse = (s, offBits) => {
+    const n = s.length, mc = 8 + offBits, cost = Array(n + 1).fill(Infinity), parent = Array(n + 1).fill(null);
+    cost[0] = 0;
+    for (let i = 0; i < n; ++i) {
+      if (!Number.isFinite(cost[i])) continue;
+      if (cost[i] + 8 < cost[i + 1]) { cost[i + 1] = cost[i] + 8; parent[i + 1] = { p: i, len: 1, off: 0 }; }
+      const m = bestMatch(s, i);
+      for (let len = 4; len <= m.len; ++len) if (cost[i] + mc < cost[i + len]) { cost[i + len] = cost[i] + mc; parent[i + len] = { p: i, len, off: m.off }; }
+    }
+    const rev = [];
+    for (let i = n; i;) { const e = parent[i]; rev.push(e.off ? { len: e.len, off: e.off } : { s: s.slice(e.p, i), len: i - e.p, off: 0 }); i = e.p; }
+    const raw = rev.reverse(), tokens = [];
+    for (const x of raw) {
+      const last = tokens[tokens.length - 1];
+      if (!x.off && last && !last.off) { last.s += x.s; last.len += x.len; }
+      else tokens.push(x);
+    }
+    return { bits: cost[n], tokens };
+  };
+  const updateToy = () => {
+    const s = sampleText.value.slice(0, 180), off = Number(offsetBits.value), lazy = lazyParse(s, off), opt = optParse(s, off), raw = s.length * 8;
+    toyInputBytes.textContent = `${s.length} bytes`;
+    toyLiteralBits.textContent = `${raw} bits`;
+    toyLazyBits.textContent = `${lazy.bits} bits`;
+    toyOptBits.textContent = `${opt.bits} bits`;
+    toyLazyTokens.textContent = tokenText(lazy.tokens);
+    toyOptTokens.textContent = tokenText(opt.tokens);
+  };
+  sampleText.addEventListener("input", updateToy);
+  offsetBits.addEventListener("change", updateToy);
+  updateToy();
 
   letters.forEach((x, i) => {
     const b = document.createElement("div");
