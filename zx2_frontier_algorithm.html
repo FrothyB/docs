@@ -870,6 +870,7 @@ parentOff      match offset, or zero for literals</pre>
       <div>
         <h2>Change the input</h2>
         <p class="lead">A parser is easiest to understand when the text fights back. Edit the sample and watch a toy lazy parse compete with a toy btopt parse.</p>
+        <p>The default text is a small trap. Near the end, <code>ABCD</code> is available immediately, but <code>CDEFGHIJ</code> begins two bytes later. A one-byte lazy parser cannot see that far, so it spends a match early; btopt waits and buys the longer edge.</p>
         <p>The model here deliberately uses the same simple costs as the diagrams: each literal byte costs 8 bits, and each match costs one token byte plus the selected offset width. It is not a byte-for-byte ZX2 encoder, but it preserves the mathematical issue: local matches can be globally expensive.</p>
         <p>btopt wins by delaying commitment. Lazy chooses as it walks. btopt fills the cost table first, then reads the path backward. That single pause is the raison d'etre of the algorithm.</p>
       </div>
@@ -885,7 +886,7 @@ parentOff      match offset, or zero for literals</pre>
           </g>
         </svg>
         <div class="sandbox" aria-label="editable compression example">
-          <textarea id="sampleText" spellcheck="false">abcdq cdefghijxxabcdefghij</textarea>
+          <textarea id="sampleText" spellcheck="false">ABCDq CDEFGHIJxxABCDEFGHIJ</textarea>
           <div class="parse-controls" aria-label="parse display controls">
             <button class="active" type="button" data-scheme="lazy">Lazy</button>
             <button type="button" data-scheme="opt">btopt</button>
