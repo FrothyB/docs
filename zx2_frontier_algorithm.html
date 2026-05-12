@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>btopt: the ZX2 Binary-Tree Optimal Parser</title>
+<title>ZX2 Compression Parsing Ladder</title>
 <style>
   :root {
     color-scheme: light;
@@ -140,6 +140,54 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
     margin-top: 28px;
+  }
+  .ladder {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 28px;
+  }
+  .tier {
+    position: relative;
+    min-height: 235px;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--white);
+    overflow: hidden;
+  }
+  .tier::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 5px;
+    background: var(--teal);
+  }
+  .tier.greedy::before { background: var(--gold); }
+  .tier.lazy::before { background: var(--teal); }
+  .tier.btlazy::before { background: var(--red); }
+  .tier.btopt::before { background: var(--blue); }
+  .tier .label {
+    display: inline-block;
+    margin: 4px 0 16px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    background: #f0fbf8;
+    color: var(--teal);
+    font: 850 12px/1 ui-sans-serif, system-ui, sans-serif;
+    text-transform: uppercase;
+  }
+  .tier.greedy .label { background: #fff6e4; color: #7a5600; }
+  .tier.lazy .label { background: #e4f2ef; color: var(--teal); }
+  .tier.btlazy .label { background: #fff1ee; color: var(--red); }
+  .tier.btopt .label { background: #e9f1fb; color: var(--blue); }
+  .tier h3 { margin: 0 0 10px; }
+  .tier p { margin: 0; font: 15px/1.46 ui-sans-serif, system-ui, sans-serif; }
+  .tier small {
+    display: block;
+    margin-top: 14px;
+    color: var(--muted);
+    font: 800 12px/1.35 ui-sans-serif, system-ui, sans-serif;
   }
   .two {
     display: grid;
@@ -610,7 +658,7 @@
     .hero h1 { font-size: 52px; }
     .dek { font-size: 22px; }
     h2 { font-size: 32px; }
-    .grid, .split, .two, .score, .knobs, .statecards, .calc-controls, .calc-output, .sandbox-output { grid-template-columns: 1fr; }
+    .grid, .split, .ladder, .two, .score, .knobs, .statecards, .calc-controls, .calc-output, .sandbox-output { grid-template-columns: 1fr; }
     .mini div { grid-template-columns: 1fr; gap: 6px; }
     .rail { grid-template-columns: repeat(3, 1fr); }
     .bytes { grid-template-columns: repeat(9, 1fr); }
@@ -621,12 +669,12 @@
 <body>
   <header class="hero">
     <div class="wrap">
-      <h1>btopt</h1>
-      <p class="dek">The binary-tree optimal ZX2 parser: turn a short stretch of input into a graph of literal and match edges, then emit the cheapest path through it.</p>
+      <h1>ZX2 parser ladder</h1>
+      <p class="dek">Compression is a sequence of bets: write bytes literally, or point backward and copy. ZX2 climbs from greedy choices to lazy lookahead, BT-backed lazy search, and finally a bounded optimal frontier.</p>
       <div class="meta">
+        <span class="pill">greedy -> lazy -> btlazy -> btopt</span>
         <span class="pill">Core/misc/ZX2.hpp</span>
-        <span class="pill">btopt / segmented DP</span>
-        <span class="pill">BT-backed match search</span>
+        <span class="pill">same decoder, smarter parser</span>
       </div>
     </div>
   </header>
@@ -635,14 +683,13 @@
     <div class="wrap grid">
       <div>
         <h2>The parser's bargain</h2>
-        <p class="lead">ZX2 is an LZ compressor: its output is a sequence of literal bytes and backward references into text already seen. The decoder follows those instructions mechanically. The parser has the harder problem: deciding which instructions should exist.</p>
-        <p>A literal is the direct statement of a byte. A match is an abbreviation: pay for a token, an offset, and sometimes extra length, then recover many bytes by reference. A repeat in the input is only an opportunity; it becomes a match only when the abbreviation is cheaper than the words it replaces.</p>
-        <p>btopt is the parser mode that treats this as an optimization problem. Over a bounded segment, every byte boundary is a vertex; every legal literal or match is a directed edge; every edge has the exact number of bits it will cost in the ZX2 stream. The parse is the minimum-cost path.</p>
-        <p>For a cursory read, that is the whole idea: btopt spends encoder work to buy non-local decisions while the decoder stays unchanged. The rest of the page unpacks what "minimum", "bounded", and "legal edge" mean in the actual implementation.</p>
+        <p class="lead">Every LZ compressor speaks the same small language: literal bytes for new material, and backward references for phrases already seen. The decoder follows that language mechanically. The parser decides what to say.</p>
+        <p>A literal is honest and expensive: one byte in, one byte out. A match is a promise: pay for a token, an offset, and maybe an extended length, then recover many bytes by copying from history. Repetition is only raw material; parsing is the act of pricing it.</p>
+        <p>The central question is not "what is the longest match here?" It is "which sequence of literal and match tokens makes the whole input cheapest under this file format?" Greedy, lazy, btlazy, and btopt are four answers to that question with increasing patience.</p>
         <div class="mini">
-          <div><b>Literal run</b><span>Raw bytes written directly. Excellent for new material, wasteful when the same phrase has already appeared.</span></div>
-          <div><b>Match</b><span>A length plus an offset. It earns its keep only when the copied phrase is long enough to repay the token and offset overhead.</span></div>
-          <div><b>btopt</b><span>A segmented shortest-path parser using a binary-tree match finder to propose useful match edges.</span></div>
+          <div><b>Literal run</b><span>Raw bytes written directly. Perfect for novel material, wasteful when the same phrase has already appeared.</span></div>
+          <div><b>Match</b><span>A length plus an offset. It earns its keep only when copied bytes repay token, offset, and extension overhead.</span></div>
+          <div><b>Parser</b><span>The encoder policy that chooses a tokenization. Better parsers spend more CPU so the stream can spend fewer bits.</span></div>
         </div>
       </div>
       <figure class="figure">
@@ -682,13 +729,57 @@
     </div>
   </section>
 
+  <section class="band">
+    <div class="wrap">
+      <h2>Four tiers of patience</h2>
+      <p class="lead">The ladder is not four file formats. It is four encoder policies for the same literal/match language. Each tier asks one less myopic question than the tier below it.</p>
+      <div class="ladder">
+        <div class="tier greedy"><span class="label">tier 0</span><h3>Greedy</h3><p>At the current byte, take the best profitable match now; otherwise grow the literal run. It is fast because it commits immediately.</p><small>Question: what is best here?</small></div>
+        <div class="tier lazy"><span class="label">tier 1</span><h3>Lazy</h3><p>Before taking today's match, peek one byte ahead. If tomorrow's match saves more, emit one literal and defer.</p><small>Question: is one byte later better?</small></div>
+        <div class="tier btlazy"><span class="label">tier 2</span><h3>BTLazy</h3><p>Keep the local walk, but upgrade the candidate search to a suffix-ordered binary tree and a small configurable lookahead.</p><small>Question: can a better finder change the local answer?</small></div>
+        <div class="tier btopt"><span class="label">tier 3</span><h3>btopt</h3><p>Stop emitting while deciding. Build a bounded graph of literal and match edges, then emit the cheapest path through it.</p><small>Question: what is the best route?</small></div>
+      </div>
+      <figure class="figure" style="margin-top: 28px;">
+        <svg viewBox="0 0 1120 420" role="img" aria-label="parser ladder from greedy to btopt">
+          <rect width="1120" height="420" fill="#fffdfa"/>
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#17201c"/></marker>
+          </defs>
+          <g transform="translate(80 304)" font-family="ui-sans-serif, system-ui" font-weight="850" text-anchor="middle">
+            <path d="M0 0 H920" stroke="#17201c" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)"/>
+            <g fill="#17201c"><circle cx="0" cy="0" r="10"/><circle cx="260" cy="0" r="10"/><circle cx="540" cy="0" r="10"/><circle cx="920" cy="0" r="10"/></g>
+            <path d="M0 -22 H150" stroke="#aa7600" stroke-width="9" stroke-linecap="round"/>
+            <path d="M260 0 C330 -95 410 -95 480 0" stroke="#087d78" stroke-width="9" fill="none" stroke-linecap="round"/>
+            <path d="M540 0 C626 -150 756 -150 842 0" stroke="#b43d45" stroke-width="9" fill="none" stroke-linecap="round"/>
+            <path d="M690 0 C760 -215 900 -215 970 0" stroke="#3768a6" stroke-width="9" fill="none" stroke-linecap="round" opacity=".92"/>
+            <text x="0" y="46" fill="#7a5600">greedy</text>
+            <text x="260" y="46" fill="#087d78">lazy</text>
+            <text x="540" y="46" fill="#b43d45">btlazy</text>
+            <text x="920" y="46" fill="#3768a6">btopt</text>
+          </g>
+          <g font-family="ui-sans-serif, system-ui" font-size="15" font-weight="850">
+            <rect x="72" y="60" width="206" height="86" rx="8" fill="#fff6e4" stroke="#e0bf78"/>
+            <text x="94" y="96" fill="#7a5600">commit immediately</text><text x="94" y="123" fill="#17201c" font-weight="760">lowest encoder work</text>
+            <rect x="312" y="42" width="218" height="98" rx="8" fill="#e4f2ef" stroke="#8cc7bf"/>
+            <text x="334" y="78" fill="#087d78">delay by one byte</text><text x="334" y="105" fill="#17201c" font-weight="760">fixes the common trap</text>
+            <rect x="566" y="28" width="232" height="110" rx="8" fill="#fff1ee" stroke="#e4a5a5"/>
+            <text x="588" y="64" fill="#b43d45">better candidates</text><text x="588" y="91" fill="#17201c" font-weight="760">BT search + short lookahead</text>
+            <rect x="832" y="18" width="234" height="124" rx="8" fill="#e9f1fb" stroke="#99b7dc"/>
+            <text x="854" y="54" fill="#3768a6">plan the segment</text><text x="854" y="81" fill="#17201c" font-weight="760">dynamic programming frontier</text><text x="854" y="108" fill="#5f6f69" font-size="13">more CPU, same decoder</text>
+          </g>
+        </svg>
+        <figcaption class="caption">Each step spends more encoder work to postpone commitment. The compressed stream remains ZX2 tokens.</figcaption>
+      </figure>
+    </div>
+  </section>
+
   <section>
     <div class="wrap grid">
       <div>
-        <h2>The trap one byte later</h2>
-        <p class="lead">Parsing is full of near misses. At byte 1000 a decent repeated phrase may begin; at byte 1001, a better one. A local parser can spend its one chance too soon.</p>
-        <p>The lazy parser handles the simplest form of that problem by peeking one byte ahead. btopt gives itself a longer horizon. It treats the next segment as a map: every byte boundary is a position, and every literal or match is a forward edge.</p>
-        <p>The question stops being "which match looks best here?" and becomes "which route reaches the segment end at the lowest encoded cost?"</p>
+        <h2>Why local choice fails</h2>
+        <p class="lead">Compression is full of near misses. At byte 1000 a decent repeated phrase may begin; at byte 1001, a better one. A parser that must decide now can spend its match too early.</p>
+        <p>Greedy sees only the current position. Lazy fixes the smallest version of the problem by comparing the current match with the next byte's match. BTLazy keeps that local discipline but gives the decision a sharper match finder and a short configurable lookahead.</p>
+        <p>btopt changes the shape of the problem. It treats the next segment as a map: byte boundaries are vertices, literals and matches are forward edges, and edge weights are exact ZX2 bit costs. Then it chooses the cheapest route.</p>
         <div class="rail" aria-label="toy repeated input">
           <span class="cool">a</span><span>b</span><span>r</span><span>a</span><span>c</span><span>a</span>
           <span class="hot">a</span><span class="hot">b</span><span class="hot">r</span><span class="hot">a</span><span class="hot">c</span><span class="hot">a</span>
@@ -719,21 +810,21 @@
           <text x="72" y="88" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">Toy costs: literal = 8 bits, match shortcut = 30 bits.</text>
           <g font-family="ui-sans-serif, system-ui" font-size="14" font-weight="850">
             <rect x="482" y="118" width="190" height="92" rx="8" fill="#ffffff" stroke="#c9d7d1"/>
-            <text x="500" y="148" fill="#087d78">greedy: L + M3 + 3L = 62</text>
-            <text x="500" y="178" fill="#b43d45">btopt: 2L + M4 + L = 54</text>
+            <text x="500" y="148" fill="#087d78">local: L + M3 + 3L = 62</text>
+            <text x="500" y="178" fill="#b43d45">route: 2L + M4 + L = 54</text>
             <text x="500" y="198" fill="#65716d" font-size="12">lower total wins</text>
           </g>
         </svg>
-        <figcaption class="caption">Toggle the route. With this toy cost model, the tempting local match is 8 bits worse once the whole segment is priced.</figcaption>
+        <figcaption class="caption">With this toy cost model, the tempting local match is 8 bits worse once the whole segment is priced.</figcaption>
         <div class="choicebar" aria-label="route comparison controls">
-          <button class="active" type="button" data-route="greedy">Greedy candidate</button>
+          <button class="active" type="button" data-route="greedy">Local candidate</button>
           <button type="button" data-route="frontier">btopt route</button>
         </div>
-        <div class="route-note" id="routeNote">Greedy takes the first shortcut: one literal, a 3-byte match, then three literals. Total: 8 + 30 + 24 = 62 bits.</div>
+        <div class="route-note" id="routeNote">Local parsing takes the first shortcut: one literal, a 3-byte match, then three literals. Total: 8 + 30 + 24 = 62 bits.</div>
         <table class="route-data" aria-label="toy route cost comparison">
           <thead><tr><th>Route</th><th>Moves</th><th>Total</th></tr></thead>
           <tbody>
-            <tr class="active" data-route-row="greedy"><td>Greedy</td><td><code>L0</code>, <code>M1->4</code>, <code>L4</code>, <code>L5</code>, <code>L6</code></td><td>62 bits</td></tr>
+            <tr class="active" data-route-row="greedy"><td>Local</td><td><code>L0</code>, <code>M1->4</code>, <code>L4</code>, <code>L5</code>, <code>L6</code></td><td>62 bits</td></tr>
             <tr data-route-row="frontier"><td>btopt</td><td><code>L0</code>, <code>L1</code>, <code>M2->6</code>, <code>L6</code></td><td>54 bits</td></tr>
           </tbody>
         </table>
@@ -745,9 +836,9 @@
     <div class="wrap grid">
       <div>
         <h2>btopt as a frontier</h2>
-        <p>Imagine a survey line moving left to right. Behind it, every byte boundary already has a best known cost. At the line, btopt extends that cost forward: one literal step, or one match edge.</p>
+        <p>btopt is the top rung: it turns parsing into a shortest-path problem over a bounded horizon. Imagine a survey line moving left to right. Behind it, every byte boundary already has a best known cost. At the line, btopt extends that cost forward: one literal step, or one match edge.</p>
         <p>The literal step is always available: append one raw byte and advance. A match edge appears only when the BT match finder returns a repeated phrase whose encoded cost beats writing those bytes literally.</p>
-        <p>The frontier is not a grand object in the code. It is a compact dynamic-programming table of best-known futures:</p>
+        <p>The frontier is compact, not mystical. It is just a dynamic-programming table of best-known futures:</p>
         <pre class="codebox">cost[rel]      best cost to reach byte rel
 parent[rel]    previous position on the winning path
 parentLen      emitted literal length or match length
@@ -869,26 +960,27 @@ parentOff      match offset, or zero for literals</pre>
     <div class="wrap grid">
       <div>
         <h2>Change the input</h2>
-        <p class="lead">A parser is easiest to understand when the text fights back. Edit the sample and watch a toy lazy parse compete with a toy btopt parse.</p>
-        <p>The default text is a small trap. Near the end, <code>ABCD</code> is available immediately, but <code>CDEFGHIJ</code> begins two bytes later. A one-byte lazy parser cannot see that far, so it spends a match early; btopt waits and buys the longer edge.</p>
-        <p>The model here deliberately uses the same simple costs as the diagrams: each literal byte costs 8 bits, and each match costs one token byte plus the selected offset width. It is not a byte-for-byte ZX2 encoder, but it preserves the mathematical issue: local matches can be globally expensive.</p>
-        <p>btopt wins by delaying commitment. Lazy chooses as it walks. btopt fills the cost table first, then reads the path backward. That single pause is the raison d'etre of the algorithm.</p>
+        <p class="lead">A parser is easiest to understand when the text fights back. Edit the sample and compare all four tiers under the same toy cost model.</p>
+        <p>The default text is a small trap. Near the end, <code>ABCD</code> is available immediately, but <code>CDEFGHIJ</code> begins two bytes later. Greedy takes the first profitable match. Lazy can dodge one-byte traps. BTLazy sees a little farther with a better candidate finder. btopt waits, prices the whole segment, and then emits the route.</p>
+        <p>The model here deliberately uses simple costs: each literal byte costs 8 bits, and each match costs one token byte plus the selected offset width. It is not a byte-for-byte ZX2 encoder, but it preserves the mathematical issue: local matches can be globally expensive.</p>
       </div>
       <figure class="figure">
         <svg viewBox="0 0 760 300" role="img" aria-label="interactive parse model">
           <rect width="760" height="300" fill="#fffdfa"/>
           <text x="48" y="54" fill="#17201c" font-family="ui-sans-serif, system-ui" font-size="25" font-weight="850">The objective function</text>
-          <text x="48" y="84" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">For a token sequence T, btopt approximates this minimization over one segment.</text>
+          <text x="48" y="84" fill="#65716d" font-family="ui-sans-serif, system-ui" font-size="16">Each tier approximates this minimization with a different amount of lookahead.</text>
           <g transform="translate(62 142)" font-family="ui-monospace, Menlo, monospace">
             <rect x="0" y="0" width="630" height="92" rx="8" fill="#eef5f2" stroke="#c9d7d1"/>
             <text x="24" y="38" fill="#13201c" font-size="18" font-weight="850">C(T) = sum literal_payload_bits + sum match_token_bits</text>
-            <text x="24" y="66" fill="#13201c" font-size="18" font-weight="850">btopt segment = argmin C(T), subject to legal backward references</text>
+            <text x="24" y="66" fill="#13201c" font-size="18" font-weight="850">best parse = argmin C(T), subject to legal backward references</text>
           </g>
         </svg>
         <div class="sandbox" aria-label="editable compression example">
           <textarea id="sampleText" spellcheck="false">ABCDq CDEFGHIJxxABCDEFGHIJ</textarea>
           <div class="parse-controls" aria-label="parse display controls">
-            <button class="active" type="button" data-scheme="lazy">Lazy</button>
+            <button class="active" type="button" data-scheme="greedy">Greedy</button>
+            <button type="button" data-scheme="lazy">Lazy</button>
+            <button type="button" data-scheme="btlazy">BTLazy</button>
             <button type="button" data-scheme="opt">btopt</button>
           </div>
           <div class="sample-visual" id="sampleVisual" aria-label="highlighted parse"></div>
@@ -898,12 +990,14 @@ parentOff      match offset, or zero for literals</pre>
           </div>
           <div class="sandbox-output">
             <div><b>input</b><span id="toyInputBytes">0 bytes</span></div>
-            <div><b>literal only</b><span id="toyLiteralBits">0 bits</span></div>
-            <div><b>lazy parse</b><span id="toyLazyBits">0 bits</span></div>
-            <div><b>btopt parse</b><span id="toyOptBits">0 bits</span></div>
+            <div><b>greedy</b><span id="toyGreedyBits">0 bits</span></div>
+            <div><b>lazy</b><span id="toyLazyBits">0 bits</span></div>
+            <div><b>btlazy / btopt</b><span id="toyBtBits">0 / 0 bits</span></div>
           </div>
           <div class="tokens">
+            <div><b>greedy</b> <span id="toyGreedyTokens"></span></div>
             <div><b>lazy</b> <span id="toyLazyTokens"></span></div>
+            <div><b>btlazy</b> <span id="toyBtLazyTokens"></span></div>
             <div><b>btopt</b> <span id="toyOptTokens"></span></div>
           </div>
         </div>
@@ -1091,19 +1185,11 @@ while node is inside the window:
         <p>The implementation keeps one winning state per byte position: one cost, one literal-extension countdown, one parent. It also takes one best scored match from the BT at each start position. It does not keep a portfolio of near-tie literal phases, multiple lengths for the same offset, or several offsets whose prices are close.</p>
         <p>That restraint is the point and the raison d'etre: far less myopic than greedy lazy parsing, but still small enough to reason about and cheap enough to run as an encoder mode.</p>
       </div>
-      <div class="split">
-        <div class="note">
-          <strong>Greedy</strong>
-          <p>Take the best local match, maybe with one lazy lookahead. Fast, but easily misled.</p>
-        </div>
-        <div class="note" style="border-left-color: var(--red)">
-          <strong>btopt</strong>
-          <p>Keep the cheapest surviving state at each byte. Broader view, still compact.</p>
-        </div>
-        <div class="note" style="border-left-color: var(--blue)">
-          <strong>Richer optimal</strong>
-          <p>Keep many competing states and candidates. Stronger ratio, much more parser work.</p>
-        </div>
+      <div class="mini">
+        <div><b>Greedy</b><span>Commit at the current byte. This is the conceptual baseline: lowest parser work, highest risk of spending a match too early.</span></div>
+        <div><b>Lazy</b><span>Let one literal stand between two candidates when the next byte has the better match. It buys a lot for one extra probe.</span></div>
+        <div><b>BTLazy</b><span>Still emits locally, but swaps row search for suffix-ordered BT search and a short lookahead. Candidate quality improves before the parser becomes global.</span></div>
+        <div><b>btopt</b><span>Keep one cheapest state per byte boundary, then trace back the segment route. Optimal only inside this deliberately small model.</span></div>
       </div>
     </div>
   </section>
@@ -1115,7 +1201,7 @@ while node is inside the window:
       <div class="knobs">
         <div class="knob">
           <h3><code>algorithm</code><span class="tag">parser</span></h3>
-          <p>Selects the parsing strategy. <code>Lazy</code> makes quick local choices. The source enum currently names btopt as <code>ZX2Algorithm::Frontier</code>; that branch spends encoder work to plan a segment route. The emitted tokens change, but the decoder still reads the same ZX2 stream family.</p>
+          <p>Selects the parsing strategy. The source enum currently exposes <code>Lazy</code>, <code>BTLazy</code>, and <code>Frontier</code>; this page also uses greedy as the conceptual baseline. <code>Frontier</code> is btopt: a segmented dynamic program over BT-supplied match edges.</p>
           <div class="direction"><span>fast local choices</span><i></i><span>slower segment planning</span></div>
         </div>
         <div class="knob">
@@ -1199,31 +1285,37 @@ while node is inside the window:
 
   <section>
     <div class="wrap">
-      <h2>What btopt buys</h2>
-      <p class="wide">btopt is a ratio mode, not a decoder idea. It spends compression CPU and encoder memory to choose better tokens, while decompression stays on the same simple ZX2 stream.</p>
+      <h2>What each tier buys</h2>
+      <p class="wide">The parser ladder is a clean speed-ratio trade: the decoder stays simple, while the encoder spends progressively more work to avoid bad local commitments.</p>
       <div class="tablewrap">
         <table class="compare" aria-label="parser tradeoff table">
           <thead>
-            <tr><th>Parser</th><th>Question it asks</th><th>Strength</th><th>Cost</th></tr>
+            <tr><th>Tier</th><th>Question it asks</th><th>What improves</th><th>What it costs</th></tr>
           </thead>
           <tbody>
             <tr>
-              <td><strong>Greedy / lazy</strong></td>
-              <td>Is there a good match here, or maybe one byte later?</td>
-              <td>Fast compression, simple state, good default behavior.</td>
-              <td>Can miss choices whose benefit appears several bytes later.</td>
+              <td><strong>Greedy</strong></td>
+              <td>Is there a profitable match right here?</td>
+              <td>Minimum parser state and simplest mental model.</td>
+              <td>Can consume bytes that would have started a better nearby match.</td>
             </tr>
             <tr>
-              <td><strong>btopt</strong></td>
+              <td><strong>Lazy</strong></td>
+              <td>Is the match one byte later better than this one?</td>
+              <td>Fixes the common off-by-one parsing mistake with tiny extra work.</td>
+              <td>Still blind to wins two or more bytes away.</td>
+            </tr>
+            <tr>
+              <td><strong>BTLazy</strong></td>
+              <td>Can a suffix-ordered finder and short lookahead improve the local choice?</td>
+              <td>Better candidates, configurable lookahead, and fewer blind bucket scans.</td>
+              <td>More branchy encoder work and binary-tree maintenance.</td>
+            </tr>
+            <tr>
+              <td><strong>btopt / Frontier</strong></td>
               <td>What is the cheapest route through this segment?</td>
               <td>Finds non-local wins inside the segment using actual ZX2 token costs.</td>
               <td>Visits every byte, walks the BT, and stores traceback state.</td>
-            </tr>
-            <tr>
-              <td><strong>Rich optimal</strong></td>
-              <td>Which competing states deserve to survive?</td>
-              <td>Potentially better ratio, especially with many near-tie candidates.</td>
-              <td>More memory, more branches, more candidate generation, harder tuning.</td>
             </tr>
           </tbody>
         </table>
@@ -1231,11 +1323,11 @@ while node is inside the window:
       <div class="two">
         <div class="note">
           <strong>Decoder stays clean</strong>
-          <p>The compressed bytes are still ordinary ZX2 tokens. btopt changes the encoder's choices, not the decoder's job.</p>
+          <p>The compressed bytes are still ordinary ZX2 tokens. Parser sophistication changes the encoder's choices, not the decoder's job.</p>
         </div>
         <div class="note" style="border-left-color: var(--red)">
           <strong>Compressor pays</strong>
-          <p>Every source byte becomes a parser state. Every state walks the binary-tree matcher. That is where the extra encoder work goes.</p>
+          <p>Every climb up the ladder postpones commitment. That is where the extra encoder work goes, and why the ratio can improve.</p>
         </div>
       </div>
     </div>
@@ -1251,7 +1343,7 @@ while node is inside the window:
           <div><b>BT node links</b><span><code>BTLink</code> and <code>BTChildRef</code> define the compact small/large child links used by the binary tree.</span></div>
           <div><b>Match scoring</b><span><code>parserMatchSave8</code> precomputes how many bits a match can save over writing the same span as literals.</span></div>
           <div><b>BT search</b><span><code>findBestAndInsertBT</code> fuses insertion and match lookup for btopt.</span></div>
-          <div><b>Parser loop</b><span>The <code>ZX2Algorithm::Frontier</code> branch in <code>ZX2Compressor::compress</code> is the current implementation name for btopt; it fills <code>cost[]</code>, records parents, traces back, and replays.</span></div>
+          <div><b>Parser loop</b><span><code>Lazy</code> is the row-backed local parser, <code>BTLazy</code> is the BT-backed local parser, and <code>ZX2Algorithm::Frontier</code> is the current implementation name for btopt; it fills <code>cost[]</code>, records parents, traces back, and replays.</span></div>
         </div>
       </div>
       <div>
@@ -1320,13 +1412,15 @@ while node is inside the window:
   const calcNote = document.getElementById("calcNote");
   const sampleText = document.getElementById("sampleText");
   const toyInputBytes = document.getElementById("toyInputBytes");
-  const toyLiteralBits = document.getElementById("toyLiteralBits");
+  const toyGreedyBits = document.getElementById("toyGreedyBits");
   const toyLazyBits = document.getElementById("toyLazyBits");
-  const toyOptBits = document.getElementById("toyOptBits");
+  const toyBtBits = document.getElementById("toyBtBits");
+  const toyGreedyTokens = document.getElementById("toyGreedyTokens");
   const toyLazyTokens = document.getElementById("toyLazyTokens");
+  const toyBtLazyTokens = document.getElementById("toyBtLazyTokens");
   const toyOptTokens = document.getElementById("toyOptTokens");
   const sampleVisual = document.getElementById("sampleVisual");
-  let activeScheme = "lazy", toyParses = { lazy: { tokens: [] }, opt: { tokens: [] } };
+  let activeScheme = "greedy", toyParses = {};
   const statuses = [
     "Start: cost[0] = 0. Every later boundary is still unknown.",
     "Literal relaxation adds 8 bits: cost[i + 1] = min(cost[i + 1], cost[i] + 8).",
@@ -1335,7 +1429,7 @@ while node is inside the window:
     "Each number shown is a cumulative best known cost in bits under this toy model."
   ];
   const routeCopy = {
-    greedy: "Greedy takes the first shortcut: one literal, a 3-byte match, then three literals. Total: 8 + 30 + 24 = 62 bits.",
+    greedy: "Local parsing takes the first shortcut: one literal, a 3-byte match, then three literals. Total: 8 + 30 + 24 = 62 bits.",
     frontier: "btopt waits one more byte, buys the 4-byte shortcut, then emits one final literal. Total: 16 + 30 + 8 = 54 bits."
   };
 
@@ -1366,27 +1460,29 @@ while node is inside the window:
   updateCalc();
 
   const printable = s => s.replaceAll("\n", "\\n").replaceAll("\t", "\\t").replaceAll(" ", "_");
-  const tokenText = t => t.slice(0, 26).map(x => x.off ? `M${x.len}@${x.start}<- ${x.off}` : `L${x.len}(${printable(x.s)})`).join("  ") + (t.length > 26 ? " ..." : "");
-  const bestMatch = (s, pos) => {
+  const tokenText = t => t.slice(0, 26).map(x => x.off ? `M${x.len}@${x.start}<-${x.off}` : `L${x.len}(${printable(x.s)})`).join("  ") + (t.length > 26 ? " ..." : "");
+  const bestMatch = (s, pos, minLen = 4, maxAhead = Infinity) => {
     let best = { len: 0, off: 0 };
-    for (let j = 0; j + 4 <= pos; ++j) {
-      let n = 0, max = Math.min(s.length - pos, s.length - j);
+    for (let j = 0; j + minLen <= pos; ++j) {
+      let n = 0, max = Math.min(s.length - pos, s.length - j, maxAhead);
       while (n < max && s.charCodeAt(j + n) === s.charCodeAt(pos + n)) ++n;
-      if (n >= 4 && (n > best.len || (n === best.len && pos - j < best.off))) best = { len: n, off: pos - j };
+      if (n >= minLen && (n > best.len || (n === best.len && pos - j < best.off))) best = { len: n, off: pos - j };
     }
     return best;
   };
   const flushLit = (tokens, s, a, b) => { if (b > a) tokens.push({ start: a, s: s.slice(a, b), len: b - a, off: 0 }); };
-  const lazyParse = (s, offBits) => {
+  const localParse = (s, offBits, lookahead) => {
     const mc = 8 + offBits, tokens = [];
     let i = 0, lit = 0, bits = 0;
     while (i < s.length) {
-      const m = bestMatch(s, i), n = i + 1 < s.length ? bestMatch(s, i + 1) : { len: 0, off: 0 };
-      const useNext = n.len * 8 - mc > m.len * 8 - mc;
-      const chosen = useNext ? n : m, skip = useNext ? 1 : 0;
-      if (chosen.len >= 4 && chosen.len * 8 > mc) {
-        flushLit(tokens, s, lit, i + skip); tokens.push({ start: i + skip, len: chosen.len, off: chosen.off });
-        bits += (i + skip - lit) * 8 + mc; i += skip + chosen.len; lit = i;
+      let best = bestMatch(s, i), bestSkip = 0, bestScore = best.len * 8 - mc;
+      for (let skip = 1; skip <= lookahead && i + skip < s.length; ++skip) {
+        const m = bestMatch(s, i + skip), score = m.len * 8 - mc;
+        if (score > bestScore) { best = m; bestSkip = skip; bestScore = score; }
+      }
+      if (best.len >= 4 && bestScore > 0) {
+        flushLit(tokens, s, lit, i + bestSkip); tokens.push({ start: i + bestSkip, len: best.len, off: best.off });
+        bits += (i + bestSkip - lit) * 8 + mc; i += bestSkip + best.len; lit = i;
       } else ++i;
     }
     flushLit(tokens, s, lit, s.length);
@@ -1422,13 +1518,16 @@ while node is inside the window:
     }));
   };
   const updateToy = () => {
-    const s = sampleText.value.slice(0, 180), off = Number(offsetBits.value), lazy = lazyParse(s, off), opt = optParse(s, off), raw = s.length * 8;
-    toyParses = { lazy, opt };
+    const s = sampleText.value.slice(0, 180), off = Number(offsetBits.value);
+    const greedy = localParse(s, off, 0), lazy = localParse(s, off, 1), btlazy = localParse(s, off, 2), opt = optParse(s, off);
+    toyParses = { greedy, lazy, btlazy, opt };
     toyInputBytes.textContent = `${s.length} bytes`;
-    toyLiteralBits.textContent = `${raw} bits`;
+    toyGreedyBits.textContent = `${greedy.bits} bits`;
     toyLazyBits.textContent = `${lazy.bits} bits`;
-    toyOptBits.textContent = `${opt.bits} bits`;
+    toyBtBits.textContent = `${btlazy.bits} / ${opt.bits} bits`;
+    toyGreedyTokens.textContent = tokenText(greedy.tokens);
     toyLazyTokens.textContent = tokenText(lazy.tokens);
+    toyBtLazyTokens.textContent = tokenText(btlazy.tokens);
     toyOptTokens.textContent = tokenText(opt.tokens);
     paintSample();
   };
