@@ -670,7 +670,7 @@
   <header class="hero">
     <div class="wrap">
       <h1>ZX2 parser ladder</h1>
-      <p class="dek">Compression is a sequence of bets: write bytes literally, or point backward and copy. ZX2 climbs from greedy choices to lazy lookahead, BT-backed lazy search, and finally a bounded optimal frontier.</p>
+      <p class="dek">A guided introduction to LZ parsing: why local compression choices fail, how better parsers postpone commitment, and how ZX2 climbs from greedy choices to btopt.</p>
       <div class="meta">
         <span class="pill">greedy -> lazy -> btlazy -> btopt</span>
         <span class="pill">Core/misc/ZX2.hpp</span>
@@ -678,6 +678,24 @@
       </div>
     </div>
   </header>
+
+  <section>
+    <div class="wrap grid">
+      <div>
+        <h2>What this page is about</h2>
+        <p class="lead">This is a compression parser tour. It starts with the smallest possible LZ idea, then adds one piece of patience at a time until the parser becomes ZX2's bounded optimal frontier.</p>
+        <p>The decoder is deliberately boring: it reads literal bytes and backward-copy instructions. The interesting question lives entirely in the encoder. Given many possible ways to describe the same bytes, which description should the compressor choose?</p>
+        <p>The page follows that question through four tiers. Greedy chooses now. Lazy checks one byte later. BTLazy keeps the local parser but improves match discovery with a binary tree. btopt stops committing locally and solves a short path problem over a segment.</p>
+      </div>
+      <div>
+        <div class="mini" style="margin-top: 4px;">
+          <div><b>Audience</b><span>You do not need ZX2 internals. The page builds from literals, matches, and cost accounting before naming implementation details.</span></div>
+          <div><b>Goal</b><span>Understand why compression ratio is often won by delaying decisions, not by blindly taking the longest match.</span></div>
+          <div><b>Map</b><span>First the vocabulary, then the ladder, then the frontier algorithm, then the concrete knobs in <code>Core/misc/ZX2.hpp</code>.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <section>
     <div class="wrap grid">
